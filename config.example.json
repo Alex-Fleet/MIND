@@ -1,0 +1,20 @@
+{
+  "_help": "拷贝本项目后：1) 跑 python3 install.py 注册 hook；2) 在 ~/.claude/settings.json 的 env 填你自己的 ANTHROPIC_AUTH_TOKEN；3) 重启 Claude Code。data_dir 留 null 则默认用 项目根/data。",
+  "data_dir": null,
+  "windows": {
+    "turn_days": 7,
+    "daily_days": 30
+  },
+  "thresholds": {
+    "min_turns_for_summary": 1,
+    "min_summaries_for_daily": 2,
+    "min_dailies_for_monthly": 3
+  },
+  "llm": {
+    "model": "deepseek-v4-flash",
+    "temperature": 0.3,
+    "max_tokens": 4000,
+    "timeout": 30,
+    "max_retries": 3
+  }
+}

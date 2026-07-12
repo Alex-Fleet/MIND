@@ -1,0 +1,18 @@
+{
+  "windows": {
+    "turn_days": 7,
+    "daily_days": 30
+  },
+  "thresholds": {
+    "min_turns_for_summary": 1,
+    "min_summaries_for_daily": 2,
+    "min_dailies_for_monthly": 3
+  },
+  "llm": {
+    "model": "deepseek-v4-pro",
+    "temperature": 0.3,
+    "max_tokens": 4000,
+    "timeout": 60,
+    "max_retries": 3
+  }
+}
