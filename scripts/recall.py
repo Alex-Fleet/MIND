@@ -27,16 +27,20 @@ def search_turn_summaries(store: Store, query: str,
                           days: int | None = None) -> list[dict]:
     """Search turn_summaries by title/summary using LIKE."""
     sql = """
-        SELECT title, summary, file_path, project, summarized_at
-        FROM turn_summaries WHERE (title LIKE ? OR summary LIKE ?)
+        SELECT ts.title, ts.summary, ts.file_path, ts.project,
+               ts.summarized_at, t.timestamp AS real_ts
+        FROM turn_summaries ts
+        JOIN turns t ON t.session_id = ts.session_id
+                     AND t.seq = ts.turn_seq AND t.role = 'user'
+        WHERE (ts.title LIKE ? OR ts.summary LIKE ?)
     """
     params = [f"%{query}%", f"%{query}%"]
     if project:
-        sql += " AND project = ?"
+        sql += " AND ts.project = ?"
         params.append(project)
     if days:
-        sql += f" AND summarized_at > datetime('now', '-{days} days')"
-    sql += " ORDER BY summarized_at DESC LIMIT 20"
+        sql += f" AND t.timestamp > datetime('now', '-{days} days')"
+    sql += " ORDER BY t.timestamp DESC LIMIT 20"
 
     with sqlite3.connect(store.db_path) as conn:
         conn.row_factory = sqlite3.Row

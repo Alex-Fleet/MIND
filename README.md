@@ -86,6 +86,28 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.0.0 — 首个正式版：注入隔离 + 日报重构 + 看板保活
+
+> 本轮为系统从"骨架"到"正式可用"的完整交付。所有已知 bug 已修复，注入链路已验证通过。
+
+**项目隔离（Phase 2a）**：注入上下文按项目过滤。Hook 从 stdin 读取 `transcript_path` 提取 CC 项目 slug → 注册表查询兄弟 slug → store 层 `WHERE project IN (...)` 过滤。注入量从全局 69K 降至本项目 40K 字，验证通过：其他项目内容零泄漏。
+
+**日报重构**：
+- 时间分桶改用 `turns.timestamp`（真实对话时间），不再按 `summarized_at`（处理时间）
+- 来源 turn 清单剥离到独立 `-index.md` 文件（渐进式披露），日报正文只存 ~1K 字总结
+- 存档文件名加项目 slug（`{date}-{project}.md`），消除同日不同项目覆盖问题
+- 注入层日报不再截断
+
+**注入通道修复**：`inject.py` 输出从 JSON `{"systemMessage": "..."}` 改为纯文本。VS Code 扩展只吃 stdout 纯文本，JSON 包装会导致上下文不注入。经三轮金丝雀测试验证通过。
+
+**7-10 错误记忆清理**：删除旧系统（配对错乱）产生的 17 条 turn 摘要 + 1 篇日报，LLM 全量重摘要并重建日报。
+
+**时间线排序修复**：`dashboard_server.py` 和 `recall.py` 的排序键统一从 `summarized_at` 改为 `turns.timestamp`（真实对话时间）。
+
+**看板保活**：SessionStart hook 自动检测 8765 端口，未监听则后台拉起 `dashboard_server.py`，开会话即看板在线。
+
+**一次性脚本**：`scripts/rebuild_dailies.py`（日报全量重建）、`scripts/cleanup_0710.py`（7-10 错误记忆清理+重摘要）。
+
 ### 2026-07-12 — 看板上线 + 稳健性加固 + 数据重建
 - **看板 (dashboard)**：新增 `dashboard_server.py`（Python 标准库，只读 DB，绑 127.0.0.1）
   + 暗色前端 `dashboard/index.html`。统一时间线（turn/日报/月报）、项目/类型筛选、

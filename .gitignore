@@ -14,6 +14,7 @@ config.local.json
 
 # ── 用户私有的项目注册表（slug 分身映射 + 标签），出厂应为空 ──
 projects.json
+projects.draft.json
 
 # ── Python ──
 __pycache__/

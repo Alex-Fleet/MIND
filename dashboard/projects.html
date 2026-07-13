@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🗂 项目管理 · 奶龙博士</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--border:#30363d;
+        --text:#e6edf3;--muted:#8b949e;--turn:#4493f8;--daily:#3fb950;--monthly:#bc8cff;--warn:#d29922;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,"PingFang SC",Segoe UI,sans-serif}
+  header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);padding:12px 20px;z-index:10}
+  .top{display:flex;align-items:center;gap:12px}
+  .title{font-size:18px;font-weight:600}
+  a.back{color:var(--muted);text-decoration:none;font-size:13px}
+  a.back:hover{color:var(--text)}
+  .spacer{margin-left:auto}
+  .btn{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px}
+  .btn:hover{background:var(--panel2)}
+  .btn.primary{background:#1f6feb22;border-color:#1f6feb;color:#79c0ff}
+  .chips{display:flex;gap:8px;margin-top:10px}
+  .chip{background:var(--panel);border:1px solid var(--border);color:var(--muted);padding:4px 14px;border-radius:20px;cursor:pointer;font-size:12px;user-select:none}
+  .chip.on{background:#1f6feb22;border-color:#1f6feb;color:#79c0ff}
+  .status{margin-top:8px;font-size:12px;color:var(--muted);min-height:16px}
+  .status.ok{color:var(--daily)} .status.err{color:#f85149;white-space:pre-wrap}
+  main{padding:14px 20px 60px}
+  .tips{color:var(--muted);font-size:12px;margin:0 0 12px;max-width:920px}
+  .zone-title{font-size:12px;color:var(--muted);margin:16px 0 8px;font-weight:600}
+  .rowzone{display:flex;gap:14px;align-items:flex-start;overflow-x:auto;padding-bottom:6px}
+  .gridzone{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+  .col{background:var(--panel);border:1px solid var(--border);border-radius:10px;width:280px;flex:0 0 280px;padding:10px;display:flex;flex-direction:column;gap:8px}
+  .col.compact{width:212px;flex:0 0 212px}
+  .col.unassigned{background:#161b2288;border-style:dashed}
+  .col.drag-over{border-color:#1f6feb;background:#1f6feb14}
+  .col-head{display:flex;align-items:center;gap:6px}
+  .col-head input.label{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:13px;font-weight:600}
+  .col-meta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+  .col-meta select{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 4px;font-size:12px}
+  .count{background:#ffffff0a;padding:1px 7px;border-radius:6px}
+  .del{margin-left:auto;color:var(--muted);border:none;background:none;cursor:pointer;font-size:13px}
+  .del:hover{color:#f85149} .del[disabled]{opacity:.25;cursor:not-allowed}
+  .pathrow{display:flex;align-items:center;gap:6px;font-size:11px;background:#ffffff06;border-radius:6px;padding:4px 6px}
+  .pathtxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#a9b4c0}
+  .pathtxt.unset{color:var(--muted);font-style:italic}
+  .pathbtn{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:6px;padding:2px 7px;cursor:pointer;font-size:11px;white-space:nowrap}
+  .cards{display:flex;flex-direction:column;gap:7px;min-height:26px}
+  .card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:grab}
+  .card:active{cursor:grabbing} .card.dragging{opacity:.4}
+  .card .bn{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card .st{font-size:11px;color:var(--muted);margin-top:2px}
+  .card .sm{font-size:11px;color:#8b98a5;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .detail{margin-top:8px;border-top:1px solid var(--border);padding-top:8px;font-size:12px;cursor:default}
+  .detail h5{margin:6px 0 3px;font-size:11px;color:var(--muted);font-weight:600}
+  .detail .u{color:#c9d1d9;background:#4493f814;border-left:2px solid var(--turn);padding:3px 6px;border-radius:4px;margin:3px 0;white-space:pre-wrap}
+  .detail .s{color:#c9d1d9;margin:3px 0} .detail .s b{color:var(--daily)}
+  .empty{font-size:12px;color:var(--muted);padding:4px 2px}
+  .addcol{flex:0 0 200px}.addcol .btn{width:100%}
+  .overlay{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50}
+  .overlay.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;padding:16px}
+  .modal h4{margin:0 0 8px}
+  .curpath{font-size:12px;color:#a9b4c0;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;word-break:break-all;margin-bottom:8px}
+  .dirlist{overflow:auto;flex:1;border:1px solid var(--border);border-radius:6px;min-height:180px}
+  .diritem{padding:7px 10px;cursor:pointer;border-bottom:1px solid #ffffff08;font-size:13px}
+  .diritem:hover{background:var(--panel2)}
+  .modal-actions{display:flex;gap:8px;margin-top:10px;justify-content:flex-end}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <a class="back" href="/">← 记忆时间线</a>
+    <div class="title">🗂 项目管理</div>
+    <div class="spacer"></div>
+    <button class="btn primary" onclick="save()">💾 保存</button>
+  </div>
+  <div class="chips" id="modeChips"></div>
+  <div class="status" id="status">加载中…</div>
+</header>
+<main>
+  <p class="tips">拖 slug 卡片进项目列合并（同项目的分身拖到一起）；点卡片展开看记忆内容判断归属；每个项目可设文件夹路径。改完点保存，做双向唯一校验。</p>
+  <div id="board"></div>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h4>📁 选择项目文件夹</h4>
+    <div class="curpath" id="curpath"></div>
+    <div class="dirlist" id="dirlist"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closePicker()">取消</button>
+      <button class="btn primary" onclick="choosePath()">选定此文件夹</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TYPES={long_term:"长期",one_off:"一次性",archived:"归档"};
+const MODES=[["all","全部"],["long_term","长期"],["one_off","一次性"],["archived","归档"]];
+const S={projects:[],slug_stats:{},unassigned:[],source:"",mode:"all"};
+const detailCache={}; const openSlugs=new Set();
+let dragging=null; const picker={idx:-1,path:"",dirs:[],parent:null};
+
+const pad=n=>String(n).padStart(2,"0");
+function fmt(iso){if(!iso)return"—";const d=new Date(iso);return `${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+function esc(s){return(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function setStatus(t,cls){const el=document.getElementById("status");el.className="status"+(cls?" "+cls:"");el.textContent=t;}
+
+async function load(){
+  setStatus("加载中…");
+  try{
+    const d=await(await fetch("/api/projects",{cache:"no-store"})).json();
+    S.projects=d.projects.map(p=>({id:p.id,label:p.label,type:p.type,slugs:p.slugs.slice(),path:p.path||""}));
+    S.slug_stats=d.slug_stats;S.unassigned=d.unassigned.slice();S.source=d.source;
+    render();
+    const tag=d.source==="projects.json"?"已生效":d.source==="projects.draft.json"?"LLM 草稿（未生效）":"空";
+    setStatus(`来源：${tag}　·　${S.projects.length} 个项目　·　未分配 ${S.unassigned.length}`);
+  }catch(e){setStatus("⚠ 连不上服务器","err");}
+}
+
+/* ── 模型操作 ── */
+function moveSlug(slug,idx){
+  S.unassigned=S.unassigned.filter(s=>s!==slug);
+  S.projects.forEach(p=>p.slugs=p.slugs.filter(s=>s!==slug));
+  if(idx===-1)S.unassigned.push(slug);else S.projects[idx].slugs.push(slug);
+  render();
+}
+window.addProject=()=>{S.projects.push({id:"",label:"新项目",type:"long_term",slugs:[],path:""});render();};
+window.delProject=i=>{if(!S.projects[i].slugs.length){S.projects.splice(i,1);render();}};
+window.setLabel=(i,v)=>{S.projects[i].label=v;};
+window.setType=(i,v)=>{S.projects[i].type=v;render();};
+window.setMode=m=>{S.mode=m;render();};
+
+/* ── 卡片 + 展开记忆 ── */
+async function toggleSlug(ev,slug){
+  ev.stopPropagation();
+  if(openSlugs.has(slug))openSlugs.delete(slug);
+  else{
+    openSlugs.add(slug);
+    if(!detailCache[slug]){
+      try{detailCache[slug]=await(await fetch("/api/slug?slug="+encodeURIComponent(slug))).json();}
+      catch(e){detailCache[slug]={samples:[],summaries:[]};}
+    }
+  }
+  render();
+}
+window.toggleSlug=toggleSlug;
+function detailHTML(slug){
+  const d=detailCache[slug];
+  if(!d)return `<div class="detail" onclick="event.stopPropagation()">加载中…</div>`;
+  let h=`<div class="detail" onclick="event.stopPropagation()">`;
+  if(d.summaries&&d.summaries.length){h+=`<h5>📝 近期摘要</h5>`;
+    d.summaries.forEach(s=>h+=`<div class="s"><b>${esc(s.title)}</b>　${esc(s.summary||"")}</div>`);}
+  if(d.samples&&d.samples.length){h+=`<h5>👤 用户原话</h5>`;
+    d.samples.forEach(s=>h+=`<div class="u">${esc(s.text)}</div>`);}
+  if(!(d.summaries&&d.summaries.length)&&!(d.samples&&d.samples.length))h+=`<div class="empty">（无内容）</div>`;
+  return h+`</div>`;
+}
+function cardHTML(slug){
+  const st=S.slug_stats[slug]||{basename:slug,sessions:0,turns:0,first:null,last:null,samples:[]};
+  const open=openSlugs.has(slug);
+  const sm=(!open&&st.samples&&st.samples[0])?`<div class="sm">${esc(st.samples[0])}</div>`:"";
+  return `<div class="card" draggable="true" data-slug="${esc(slug)}" title="${esc(slug)}" onclick="toggleSlug(event,this.dataset.slug)">
+    <div class="bn">${esc(st.basename||slug)}</div>
+    <div class="st">${st.sessions} 会话 · ${st.turns} turn · ${fmt(st.first)}~${fmt(st.last)} ${open?'▲':'▾'}</div>
+    ${sm}${open?detailHTML(slug):""}</div>`;
+}
+
+/* ── 项目列 / 未分配 ── */
+function projectHTML(idx,p,compact){
+  const cards=p.slugs.map(cardHTML).join("")||`<div class="empty">（空，拖卡片到这里）</div>`;
+  const opts=Object.keys(TYPES).map(k=>`<option value="${k}" ${k===p.type?"selected":""}>${TYPES[k]}</option>`).join("");
+  return `<div class="col${compact?' compact':''}" data-idx="${idx}">
+    <div class="col-head">
+      <input class="label" value="${esc(p.label)}" onchange="setLabel(${idx},this.value)">
+      <button class="del" ${p.slugs.length?"disabled title='列非空，先移走卡片'":""} onclick="delProject(${idx})">✕</button>
+    </div>
+    <div class="col-meta"><select onchange="setType(${idx},this.value)">${opts}</select><span class="count">${p.slugs.length} 个分身</span></div>
+    <div class="pathrow"><span class="pathtxt${p.path?'':' unset'}" title="${esc(p.path)}">${p.path?esc(p.path):"未设置文件夹"}</span><button class="pathbtn" onclick="pickPath(${idx})">📁 选择</button></div>
+    <div class="cards">${cards}</div></div>`;
+}
+function unassignedHTML(){
+  const cards=S.unassigned.map(cardHTML).join("")||`<div class="empty">（空）</div>`;
+  return `<div class="col unassigned" data-idx="-1">
+    <div class="col-head"><div class="title" style="font-size:14px">未分配</div></div>
+    <div class="col-meta"><span class="count">${S.unassigned.length}</span> 个待归类</div>
+    <div class="cards">${cards}</div></div>`;
+}
+function render(){
+  document.getElementById("modeChips").innerHTML=MODES.map(([k,l])=>
+    `<span class="chip ${S.mode===k?'on':''}" onclick="setMode('${k}')">${l}</span>`).join("");
+  const m=S.mode, longs=[],oneoffs=[],archs=[];
+  S.projects.forEach((p,i)=>{(p.type==="long_term"?longs:p.type==="archived"?archs:oneoffs).push([i,p]);});
+  let row=unassignedHTML();
+  if(m==="all"||m==="long_term") longs.forEach(([i,p])=>row+=projectHTML(i,p,false));
+  row+=`<div class="addcol"><button class="btn" onclick="addProject()">＋ 新建项目</button></div>`;
+  let html=`<div class="rowzone">${row}</div>`;
+  let grid="";
+  if(m==="all"||m==="one_off") oneoffs.forEach(([i,p])=>grid+=projectHTML(i,p,true));
+  if(m==="all"||m==="archived") archs.forEach(([i,p])=>grid+=projectHTML(i,p,true));
+  if(grid) html+=`<div class="zone-title">一次性 / 归档（紧凑，换行铺满）</div><div class="gridzone">${grid}</div>`;
+  document.getElementById("board").innerHTML=html;
+  wireDnd();
+}
+function wireDnd(){
+  document.querySelectorAll(".card").forEach(c=>{
+    c.addEventListener("dragstart",e=>{dragging=c.dataset.slug;c.classList.add("dragging");e.dataTransfer.effectAllowed="move";});
+    c.addEventListener("dragend",()=>{dragging=null;document.querySelectorAll(".card").forEach(x=>x.classList.remove("dragging"));});
+  });
+  document.querySelectorAll(".col").forEach(col=>{
+    col.addEventListener("dragover",e=>{e.preventDefault();col.classList.add("drag-over");});
+    col.addEventListener("dragleave",()=>col.classList.remove("drag-over"));
+    col.addEventListener("drop",e=>{e.preventDefault();col.classList.remove("drag-over");
+      if(dragging!=null)moveSlug(dragging,parseInt(col.dataset.idx,10));});
+  });
+}
+
+/* ── 文件夹选择器 ── */
+window.pickPath=async idx=>{picker.idx=idx;await browse(S.projects[idx].path||"~");document.getElementById("overlay").classList.add("on");};
+async function browse(path){
+  try{const d=await(await fetch("/api/fs?path="+encodeURIComponent(path))).json();
+    picker.path=d.path;picker.dirs=d.dirs;picker.parent=d.parent;}
+  catch(e){picker.dirs=[];picker.parent=null;}
+  renderPicker();
+}
+window.browse=browse;
+function renderPicker(){
+  document.getElementById("curpath").textContent=picker.path||"";
+  let h="";
+  if(picker.parent)h+=`<div class="diritem" data-path="${esc(picker.parent)}">📁 .. 上级目录</div>`;
+  picker.dirs.forEach(d=>h+=`<div class="diritem" data-path="${esc(d.path)}">📁 ${esc(d.name)}</div>`);
+  if(!picker.dirs.length)h+=`<div class="diritem" style="color:var(--muted);cursor:default">（无子文件夹）</div>`;
+  document.getElementById("dirlist").innerHTML=h;
+}
+window.closePicker=()=>document.getElementById("overlay").classList.remove("on");
+window.choosePath=()=>{if(picker.idx>=0)S.projects[picker.idx].path=picker.path;closePicker();render();};
+
+/* ── 保存 ── */
+async function save(){
+  const payload={projects:S.projects
+    .filter(p=>p.label.trim()&&p.slugs.length)
+    .map(p=>({id:p.id,label:p.label.trim(),type:p.type,slugs:p.slugs,path:p.path||""}))};
+  setStatus("保存中…");
+  try{
+    const r=await fetch("/api/projects",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(d.ok){setStatus("已保存 ✓ 已生效","ok");load();}
+    else setStatus("保存被拒（双向唯一校验）：\n"+(d.errors||[]).join("\n"),"err");
+  }catch(e){setStatus("⚠ 保存失败："+e,"err");}
+}
+window.save=save;
+
+document.getElementById("dirlist").addEventListener("click",e=>{
+  const it=e.target.closest(".diritem"); if(it&&it.dataset.path)browse(it.dataset.path);
+});
+load();
+</script>
+</body>
+</html>

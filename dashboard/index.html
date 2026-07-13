@@ -63,6 +63,7 @@
     <div class="title"><span class="dot"></span>奶龙博士 · 记忆看板</div>
     <div class="spacer"></div>
     <span class="refresh" id="refresh">加载中…</span>
+    <a class="btn" href="/projects" style="text-decoration:none">🗂 项目管理</a>
     <span class="btn" id="noiseBtn" onclick="toggleNoise()"></span>
     <span class="btn" onclick="load()">⟳ 手动刷新</span>
   </div>
@@ -73,7 +74,7 @@
 <main><div id="list"></div></main>
 
 <script>
-const S = { data:null, proj:"all", type:"all", open:new Set(), hideNoise:true };
+const S = { data:null, proj:"all", type:"all", ptype:"all", open:new Set(), hideNoise:true };
 
 // 无效记录：中断 / 无实际内容 / 空操作 / compact 压缩 等
 const NOISE=/(用户中断|中断，无|无实际内容|无内容|空操作|空会话|空.?会话|compact|compact命令|请求压缩|压缩空|执行压缩操作|纯粹回顾)/i;
@@ -117,12 +118,16 @@ function render(){
   document.getElementById("typeChips").innerHTML=tc.map(([k,l])=>
     `<span class="chip ${S.type===k?"on":""}" onclick="setType('${k}')">${l}</span>`).join("");
 
+  const ptc=[["all","全部"],["long_term","长期"],["non_long","非长期"]];
+  const ptypeChips=ptc.map(([k,l])=>`<span class="chip ${S.ptype===k?"on":""}" onclick="setPtype('${k}')">${l}</span>`).join("");
+  const nameChips=`<span class="chip ${S.proj==="all"?"on":""}" onclick="setProj('all')">全部项目</span>`+
+    projects.map((p,i)=>`<span class="chip ${S.proj===i?"on":""}" onclick="setProj(${i})" title="${esc(p.name)}">${esc(p.name)}</span>`).join("");
   document.getElementById("projChips").innerHTML=
-    `<span class="chip ${S.proj==="all"?"on":""}" onclick="setProj('all')">全部项目</span>`+
-    projects.map(p=>`<span class="chip ${S.proj===p.slug?"on":""}" onclick="setProj('${p.slug}')" title="${p.slug}">${p.name}</span>`).join("");
+    ptypeChips+`<span style="color:var(--muted);align-self:center;padding:0 2px">｜</span>`+nameChips;
 
   const rows=items.filter(it=>
-    (S.proj==="all"||it.project===S.proj)&&
+    (S.proj==="all"||it.project_name===projects[S.proj].name)&&
+    (S.ptype==="all"||(S.ptype==="long_term"?it.project_type==="long_term":(it.project_type&&it.project_type!=="long_term")))&&
     (S.type==="all"||it.type===S.type)&&
     !(S.hideNoise&&isNoise(it)));
   const list=document.getElementById("list");
@@ -143,6 +148,7 @@ function render(){
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
 window.toggle=k=>{S.open.has(k)?S.open.delete(k):S.open.add(k);render();};
 window.setProj=p=>{S.proj=p;render();};
+window.setPtype=t=>{S.ptype=t;render();};
 window.setType=t=>{S.type=t;render();};
 window.toggleNoise=()=>{S.hideNoise=!S.hideNoise;render();};
 

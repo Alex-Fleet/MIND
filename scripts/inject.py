@@ -19,6 +19,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths, load_config
 from store import Store
+from projects import Registry
+
+
+def _resolve_project_slugs(slug: str) -> list[str] | None:
+    """Given a CC slug, return all sibling slugs if registered, else [slug].
+    Returns None if no --project was provided (inject everything, backward compat)."""
+    if not slug:
+        return None
+    reg = Registry.load()
+    if reg.is_registered(slug):
+        return reg.sibling_slugs(slug)
+    return [slug]  # unregistered slug: inject only its own memories
 
 
 def build_prefs_md(store: Store) -> str:
@@ -39,8 +51,10 @@ def build_prefs_md(store: Store) -> str:
     return "\n".join(lines)
 
 
-def build_brief_md(store: Store) -> str:
-    """Build brief.md with time-pyramid context."""
+def build_brief_md(store: Store, project_slugs: list[str] | None = None) -> str:
+    """Build brief.md with time-pyramid context.
+    If `project_slugs` is provided, only inject memories from those slugs
+    (project isolation). If None, inject everything (backward compat)."""
     cfg = load_config()
     turn_days = cfg["windows"]["turn_days"]
     daily_days = cfg["windows"]["daily_days"]
@@ -52,33 +66,32 @@ def build_brief_md(store: Store) -> str:
         "",
     ]
 
-    # ── Turn Summaries (recent N days) ──
+    # ── Turn Summaries (recent N days, soft cap 150) ──
     lines.append(f"## 最近 {turn_days} 天动态")
     lines.append("")
-    turns = store.get_turn_summaries_in_window(turn_days)
+    turns = store.get_turn_summaries_in_window(
+        turn_days, project=project_slugs, limit=150)
     if turns:
         for t in turns:
             lines.append(f"### {t['title']}")
             lines.append(t["summary"])
-            lines.append(f"→ [查看完整摘要](archive/{t['file_path']})")
+            lines.append(f"→ [查看完整摘要](../data/archive/{t['file_path']})")
             lines.append("")
     else:
         lines.append("（暂无）")
         lines.append("")
 
-    # ── Daily Reports (recent N days) ──
+    # ── Daily Reports (recent N days, full content, no truncation) ──
     lines.append(f"## 最近 {daily_days} 天日报")
     lines.append("")
-    dailies = store.get_daily_reports_in_window(daily_days)
+    dailies = store.get_daily_reports_in_window(
+        daily_days, project=project_slugs)
     if dailies:
         for d in dailies:
             lines.append(f"### {d['date']}: {d['title']}")
-            # Show first 300 chars of content as preview
-            preview = d["content"][:300]
-            if len(d["content"]) > 300:
-                preview += "..."
-            lines.append(preview)
-            lines.append(f"→ [日报详情](archive/{d['file_path']})")
+            # 不截断——日报正文只含总结(~1.5K字)，来源清单已剥离到索引文件
+            lines.append(d["content"])
+            lines.append(f"→ [日报详情](../data/archive/{d['file_path']})")
             lines.append("")
     else:
         lines.append("（暂无）")
@@ -87,7 +100,7 @@ def build_brief_md(store: Store) -> str:
     # ── Monthly Reports (all, permanent) ──
     lines.append("## 历史月报")
     lines.append("")
-    monthlies = store.get_all_monthly_reports()
+    monthlies = store.get_all_monthly_reports(project=project_slugs)
     if monthlies:
         for m in monthlies:
             lines.append(f"### {m['month']}: {m['title']}")
@@ -95,7 +108,7 @@ def build_brief_md(store: Store) -> str:
             if len(m["content"]) > 300:
                 preview += "..."
             lines.append(preview)
-            lines.append(f"→ [月报详情](archive/{m['file_path']})")
+            lines.append(f"→ [月报详情](../data/archive/{m['file_path']})")
             lines.append("")
     else:
         lines.append("（暂无）")
@@ -120,7 +133,7 @@ def rebuild_injected(store: Store, paths: dict) -> dict:
     return {"prefs_md": prefs_md, "brief_md": brief_md}
 
 
-def build_system_message(store: Store) -> str:
+def build_system_message(store: Store, project_slugs: list[str] | None = None) -> str:
     """Build the systemMessage markdown for Claude Code injection."""
     prefs = store.get_preferences()
 
@@ -140,7 +153,7 @@ def build_system_message(store: Store) -> str:
         lines.append("")
 
     # ── Brief ──
-    brief = build_brief_md(store)
+    brief = build_brief_md(store, project_slugs=project_slugs)
     lines.append(brief)
 
     return "\n".join(lines)
@@ -150,6 +163,16 @@ def main():
     json_output = "--json-output" in sys.argv
     stdout = "--stdout" in sys.argv
 
+    # ── 解析 --project <slug>（项目隔离）──
+    project_slug = None
+    try:
+        pi = sys.argv.index("--project")
+        project_slug = sys.argv[pi + 1]
+    except (ValueError, IndexError):
+        pass
+
+    project_slugs = _resolve_project_slugs(project_slug)
+
     paths = get_paths()
     store = Store()
 
@@ -157,10 +180,12 @@ def main():
     result = rebuild_injected(store, paths)
 
     # Build systemMessage
-    sys_msg = build_system_message(store)
+    sys_msg = build_system_message(store, project_slugs=project_slugs)
 
     if json_output:
-        print(json.dumps({"systemMessage": sys_msg}, ensure_ascii=False))
+        # 纯文本 stdout → VS Code 插件自动注入为上下文。
+        # （过去包在 {"systemMessage": ...} JSON 里，插件不吃。）
+        print(sys_msg)
     elif stdout:
         print(sys_msg)
     else:
@@ -172,6 +197,8 @@ def main():
         "prefs_chars": len(result["prefs_md"]),
         "brief_chars": len(result["brief_md"]),
         "sysmsg_chars": len(sys_msg),
+        "project_slug": project_slug,
+        "project_slugs": project_slugs,
     })
 
 

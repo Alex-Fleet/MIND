@@ -284,18 +284,35 @@ class Store:
                 return False
 
     def get_turn_summaries_in_window(self, days: int,
-                                     project: str | None = None
+                                     project: str | list | None = None,
+                                     limit: int | None = None
                                      ) -> list[dict]:
-        """Get turn summaries within the last N days, newest first."""
+        """Get turn summaries whose REAL conversation time is within the
+        last N days, newest first.  Uses turns.timestamp (not summarized_at)
+        so the window reflects when the conversation actually happened.
+        `project` can be a single slug or a list of slugs (for merged projects)."""
         query = """
-            SELECT * FROM turn_summaries
-            WHERE summarized_at > datetime('now', ?)
+            SELECT ts.* FROM turn_summaries ts
+            JOIN turns t ON t.session_id = ts.session_id
+                         AND t.seq = ts.turn_seq
+                         AND t.role = 'user'
+            WHERE t.timestamp > datetime('now', ?)
         """
         params = [f'-{days} days']
         if project:
-            query += " AND project = ?"
-            params.append(project)
-        query += " ORDER BY summarized_at DESC"
+            if isinstance(project, list) and len(project) == 1:
+                query += " AND ts.project = ?"
+                params.append(project[0])
+            elif isinstance(project, list) and len(project) > 1:
+                ph = ",".join(["?"] * len(project))
+                query += f" AND ts.project IN ({ph})"
+                params.extend(project)
+            else:
+                query += " AND ts.project = ?"
+                params.append(project)
+        query += " ORDER BY t.timestamp DESC"
+        if limit:
+            query += f" LIMIT {int(limit)}"
 
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -306,18 +323,24 @@ class Store:
 
     def get_turn_summaries_for_date(self, date_str: str,
                                     project: str) -> list[dict]:
+        """Get turn summaries whose REAL conversation date matches date_str.
+        Uses turns.timestamp (not summarized_at) so digest buckets reflect
+        when conversations actually happened."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT * FROM turn_summaries "
-                "WHERE project = ? AND date(summarized_at) = ? "
-                "ORDER BY summarized_at",
+                "SELECT DISTINCT ts.* FROM turn_summaries ts "
+                "JOIN turns t ON t.session_id = ts.session_id "
+                             "AND t.seq = ts.turn_seq "
+                             "AND t.role = 'user' "
+                "WHERE ts.project = ? AND date(t.timestamp) = ? "
+                "ORDER BY t.timestamp",
                 (project, date_str)
             ).fetchall()
             return [dict(r) for r in rows]
 
     def get_daily_reports_in_window(self, days: int,
-                                    project: str | None = None
+                                    project: str | list | None = None
                                     ) -> list[dict]:
         query = """
             SELECT * FROM daily_reports
@@ -325,8 +348,16 @@ class Store:
         """
         params = [f'-{days} days']
         if project:
-            query += " AND project = ?"
-            params.append(project)
+            if isinstance(project, list) and len(project) == 1:
+                query += " AND project = ?"
+                params.append(project[0])
+            elif isinstance(project, list) and len(project) > 1:
+                ph = ",".join(["?"] * len(project))
+                query += f" AND project IN ({ph})"
+                params.extend(project)
+            else:
+                query += " AND project = ?"
+                params.append(project)
         query += " ORDER BY date DESC"
 
         with sqlite3.connect(self.db_path) as conn:
@@ -359,11 +390,16 @@ class Store:
                 return False
 
     def get_missing_daily_dates(self, project: str) -> list[str]:
-        """Find dates that have turn summaries but no daily report."""
+        """Find dates that have turn summaries (by REAL conversation time)
+        but no daily report yet."""
         with sqlite3.connect(self.db_path) as conn:
             rows = conn.execute(
-                "SELECT DISTINCT date(summarized_at) as d "
-                "FROM turn_summaries WHERE project = ? "
+                "SELECT DISTINCT date(t.timestamp) as d "
+                "FROM turn_summaries ts "
+                "JOIN turns t ON t.session_id = ts.session_id "
+                             "AND t.seq = ts.turn_seq "
+                             "AND t.role = 'user' "
+                "WHERE ts.project = ? "
                 "AND d NOT IN (SELECT date FROM daily_reports WHERE project = ?) "
                 "ORDER BY d",
                 (project, project)
@@ -409,13 +445,21 @@ class Store:
             except sqlite3.IntegrityError:
                 return False
 
-    def get_all_monthly_reports(self, project: str | None = None
+    def get_all_monthly_reports(self, project: str | list | None = None
                                 ) -> list[dict]:
         query = "SELECT * FROM monthly_reports"
         params = []
         if project:
-            query += " WHERE project = ?"
-            params.append(project)
+            if isinstance(project, list) and len(project) == 1:
+                query += " WHERE project = ?"
+                params.append(project[0])
+            elif isinstance(project, list) and len(project) > 1:
+                ph = ",".join(["?"] * len(project))
+                query += f" WHERE project IN ({ph})"
+                params.extend(project)
+            else:
+                query += " WHERE project = ?"
+                params.append(project)
         query += " ORDER BY month DESC"
 
         with sqlite3.connect(self.db_path) as conn:
