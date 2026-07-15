@@ -56,12 +56,21 @@ def spawn_background_catchup() -> None:
 
 
 def _is_dashboard_running(port: int = DASHBOARD_PORT) -> bool:
-    """检测 dashboard server 是否已在监听端口。"""
+    """检测 dashboard server 是否已在监听端口。
+    不只检查端口，还验证响应内容——防止其他项目占端口导致误判。"""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(0.5)
     try:
         s.connect(("127.0.0.1", port))
-        return True
+        s.sendall(b"GET / HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+        resp = b""
+        while len(resp) < 4096:
+            chunk = s.recv(1024)
+            if not chunk:
+                break
+            resp += chunk
+        # 验证是自家看板（MIND 标识），不是其他项目占的端口
+        return b"MIND" in resp or b"\xe7\x9c\x8b\xe6\x9d\xbf" in resp  # "看板" UTF-8
     except Exception:
         return False
     finally:
