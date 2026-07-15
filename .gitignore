@@ -9,8 +9,12 @@ data/
 
 # ── 密钥 / 本地覆盖配置 ──
 config.local.json
+config.json
 .env
 *.key
+
+# ── CLAUDE.md — MIND 生成，含用户个人铁律 ──
+CLAUDE.md
 
 # ── 用户私有的项目注册表（slug 分身映射 + 标签），出厂应为空 ──
 projects.json
@@ -18,7 +22,11 @@ projects.draft.json
 
 # ── Python ──
 __pycache__/
+*.pyc
 *.py[cod]
+
+# ── Claude Code 工作区 ──
+.claude/
 
 # ── 诊断 / 日志 ──
 hook_heartbeat.log

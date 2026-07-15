@@ -4,22 +4,49 @@ MIND 记忆系统 — 安装器
 把本文件夹拷到任意位置后运行：  python3 install.py
 
 它会：
-1. 把 Stop + SessionStart 两个 hook 注册进你的 ~/.claude/settings.json
+1. 检查依赖（requests）
+2. 自动创建 config.json（从 config.example.json）
+3. 自动创建 CLAUDE.md（从 CLAUDE.example.md）
+4. 把 Stop + SessionStart 两个 hook 注册进你的 ~/.claude/settings.json
    （指向本文件夹的 hooks/，绝对路径当场算出，自动处理空格）
-2. 保留你 settings.json 里的其它设置，只替换MIND自己的 hook 条目
-3. 装前自动备份 settings.json
-4. 检查 API 凭证并提示
+5. 保留你 settings.json 里的其它设置，只替换MIND自己的 hook 条目
+6. 装前自动备份 settings.json
+7. 检查 API 凭证并提示
 
 数据会存在  <本项目>/data/（首次运行自动创建）。
 """
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent
 SETTINGS = Path(os.path.expanduser("~/.claude/settings.json"))
+
+
+def _check_deps() -> bool:
+    """检查外部依赖是否已安装。"""
+    try:
+        import requests  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _copy_if_missing(src: str, dst: str, label: str) -> None:
+    """如果 dst 不存在，从 src 复制模板。"""
+    dst_path = PROJECT / dst
+    if dst_path.exists():
+        print(f"· {label} 已存在，跳过")
+        return
+    src_path = PROJECT / src
+    if src_path.exists():
+        shutil.copy(src_path, dst_path)
+        print(f"✓ 已创建 {label}（从 {src}）")
+    else:
+        print(f"⚠ 模板 {src} 不存在，跳过 {label}")
 
 
 def hook_entry(script: str, timeout: int = 120) -> dict:
@@ -35,8 +62,21 @@ def _is_nailong(entry: dict, script: str) -> bool:
 
 
 def main():
-    print(f"📦 MIND项目位置：{PROJECT}")
+    print(f"📦 MIND 项目位置：{PROJECT}")
 
+    # ── 1. 检查依赖 ──
+    if not _check_deps():
+        print("✗ 缺少依赖。请先安装：")
+        print(f"  pip3 install -r \"{PROJECT / 'requirements.txt'}\"")
+        sys.exit(1)
+    print("✓ 依赖检查通过")
+
+    # ── 2. 创建配置文件 ──
+    print()
+    _copy_if_missing("config.example.json", "config.json", "config.json")
+    _copy_if_missing("CLAUDE.example.md", "CLAUDE.md", "CLAUDE.md")
+
+    # ── 3. 注册 hook ──
     if SETTINGS.exists():
         try:
             settings = json.loads(SETTINGS.read_text(encoding="utf-8"))

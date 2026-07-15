@@ -8,11 +8,11 @@
 ```
 Memory Plugin/                 # 项目根（可放任意位置）
 ├── install.py                 # 安装器：一键注册 hook
-├── config.json                # 你的配置
-├── config.example.json        # 分享给别人的模板
-├── CLAUDE.md                  # 兜底：永久铁律（hook 挂了也能读到）
+├── requirements.txt           # Python 依赖（只有 requests）
+├── config.example.json        # 配置模板（安装时复制为 config.json）
+├── CLAUDE.example.md          # 铁律模板（安装时复制为 CLAUDE.md）
 ├── ARCHITECTURE.md            # 架构与数据流
-├── .gitignore                 # 分享边界（挡掉私密 data/）
+├── .gitignore                 # 分享边界（挡掉私密 data/ + config + CLAUDE.md）
 ├── scripts/                   # 核心脚本
 │   ├── ingest.py              # JSONL → SQLite
 │   ├── summarize.py           # turn 摘要（LLM）
@@ -40,6 +40,44 @@ Memory Plugin/                 # 项目根（可放任意位置）
 
 代码(`BASE_DIR`) 与 数据(`DATA_DIR`) 解耦：`DATA_DIR` 默认 `项目根/data`，可用 `config.json` 的
 `data_dir` 或环境变量 `NAILONG_DATA_DIR` 覆盖。
+
+## 安装
+
+### 前置要求
+- **Python 3.9+**（系统自带或 `brew install python3`）
+- **Claude Code**（VS Code 扩展或 CLI）
+- **LLM API 凭证**（DeepSeek 或 Anthropic，用于摘要生成）
+
+### 步骤
+
+```bash
+# 1. 克隆项目
+git clone <你的仓库地址>
+cd Memory-Plugin
+
+# 2. 安装依赖（就一个 requests，其余全是标准库）
+pip3 install -r requirements.txt
+
+# 3. 配置 API 凭证
+#    编辑 ~/.claude/settings.json，在 env 段填入：
+#    "ANTHROPIC_AUTH_TOKEN": "sk-你自己的",
+#    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic"
+
+# 4. 一键安装（自动创建 config.json + CLAUDE.md + 注册 hook）
+python3 install.py
+
+# 5. 重启 Claude Code → 生效
+#    新会话启动时自动注入记忆，每次回复后自动摄入+摘要
+```
+
+### 验证
+
+重启 Claude Code 后，新会话的系统消息应包含 "MIND 记忆简报"。也可以启动看板确认：
+
+```bash
+python3 scripts/dashboard_server.py
+# 打开 http://127.0.0.1:8765
+```
 
 ## 快速开始（也是"拷给别人"的步骤）
 
