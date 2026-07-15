@@ -1,4 +1,4 @@
-# 🐉 奶龙博士系统 (Nailong Doctor System)
+# MIND: MIND Is Not Diary
 
 用户级全局记忆系统，为 Claude Code 提供跨会话无缝记忆。
 **自包含、可拷贝、路径相对化**——拷到任意位置跑一下 `install.py` 就能用。
@@ -86,6 +86,26 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.1.0 — 有效性分类 + 延续合并 + 噪声覆盖 + 项目更名
+
+**项目更名**：奶龙博士 → **MIND (MIND Is Not Diary)**。
+
+**有效性三层分类**：Layer 1 确定性正则（`<task-notification>`、`<local-command-*>`、`<command-name>`、
+`[Request interrupted` 等 7 类）+ Layer 2 LLM 判断（后取消低价值，简化为 valid/invalid/merged 三类）。
+注入分级：invalid/merged 跳过，valid 完整注入。
+
+**延续合并**：`summarize.py` 新增 `_is_continuation()` 正则检测（"好了吗""继续""嗯"等），延续型 turn 自动拼入
+前序 pair 而非独立摘要，从源头消除碎片。merged 记录在看板项目名后标注 `已合并` 标识。
+
+**噪声覆盖扩展**：L1 从 4 个模式扩至 7 个（补 `<local-command-caveat>`、`<local-command-stdout>`、
+`<command-name>`、`<command-message>`），修复 `/compact` 斜杠命令和本地命令输出被误判为有效对话。
+回填 176 条历史误判记录。
+
+**看板升级**：`/api/feed` 返回 validity 字段，前端 `isNoise()` 读 DB 值，无效记录自动隐藏，
+已合并记录可见+标识。项目列表过滤空 slug 消除"（未知）"。
+
+**一次性脚本**：`scripts/classify_0714.py`、`scripts/classify_sample.py`。
+
 ### v1.0.0 — 首个正式版：注入隔离 + 日报重构 + 看板保活
 
 > 本轮为系统从"骨架"到"正式可用"的完整交付。所有已知 bug 已修复，注入链路已验证通过。
@@ -132,7 +152,7 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
   启动耗时从 >60s 降到 0.3s。
 - **清理**：`on_stop.py` 去掉迁移期的诊断残留（心跳日志、临时测试通知）。
 - **切换**：`settings.json` 的 Stop + SessionStart 两个 hook 指向新工作区；SessionStart 从
-  旧系统 `~/.claude/memory/sync.py` 切成奶龙自己的注入。
+  旧系统 `~/.claude/memory/sync.py` 切成MIND自己的注入。
 - **已知问题**：Claude Code 扩展 2.1.207 存在 Stop-hook `systemMessage` 不渲染的 bug
   （#50542，后端能解析、UI 不画）。对话内播报以此为准不可靠，可见播报改走看板(dashboard)。
 

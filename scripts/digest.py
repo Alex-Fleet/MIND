@@ -34,7 +34,7 @@ def out(msg: str) -> None:
     """进度输出：人类模式→stdout；--json 模式→stderr（保持 stdout 纯净）。"""
     print(msg, file=sys.stderr if JSON_MODE else sys.stdout)
 
-DAILY_PROMPT = """你是"奶龙博士系统"的日报编辑。基于以下今天的 turn 摘要，生成一份日报。
+DAILY_PROMPT = """你是"MIND"的日报编辑。基于以下今天的 turn 摘要，生成一份日报。
 
 【日期】{date}
 【项目】{project}
@@ -55,7 +55,7 @@ DAILY_PROMPT = """你是"奶龙博士系统"的日报编辑。基于以下今天
   "cross_day_trend": "跨日趋势（没有则为空字符串）"
 }}"""
 
-MONTHLY_PROMPT = """你是"奶龙博士系统"的月报编辑。基于以下日报，生成本月报告。
+MONTHLY_PROMPT = """你是"MIND"的月报编辑。基于以下日报，生成本月报告。
 
 【月份】{month}
 【项目】{project}
@@ -88,13 +88,14 @@ def generate_daily(date_str: str, project: str, store: Store,
       - 注入时 content 不截断（完整 1.5K 总结直注）
     """
     turns = store.get_turn_summaries_for_date(date_str, project)
-    if len(turns) < load_config()["thresholds"]["min_summaries_for_daily"]:
+    # 过滤明确噪音（Layer 1 拦截的无效 turn），避免污染日报质量
+    valid_turns = [t for t in turns if t.get("validity") != "invalid"]
+    if len(valid_turns) < load_config()["thresholds"]["min_summaries_for_daily"]:
         return False
 
     # Format turn summaries for LLM prompt
     turn_text = ""
-    for t in turns:
-        turn_text += f"### {t['title']}\n{t['summary']}\n"
+    for t in valid_turns:
         if t.get("key_decisions"):
             kd = json.loads(t["key_decisions"]) if isinstance(
                 t["key_decisions"], str) else t["key_decisions"]
@@ -110,7 +111,7 @@ def generate_daily(date_str: str, project: str, store: Store,
 
     if dry_run:
         out(f"  [DRY RUN] 将生成日报: {date_str} / {project} "
-            f"({len(turns)} turns)")
+            f"({len(valid_turns)} turns)")
         return False
 
     result = call_llm(prompt, system="你是项目记忆管理系统。严格按 JSON 格式输出。")
@@ -121,7 +122,7 @@ def generate_daily(date_str: str, project: str, store: Store,
     source_turns = [
         {"session_id": t["session_id"], "turn_seq": t["turn_seq"],
          "summary_id": t["id"]}
-        for t in turns
+        for t in valid_turns
     ]
 
     # ── 存档文件名含项目，避免覆盖 ──
@@ -137,8 +138,8 @@ def generate_daily(date_str: str, project: str, store: Store,
     index_path = daily_dir / index_filename
     index_rel = f"daily/{index_filename}"
     index_md = f"# 来源索引 · {date_str} · {project}\n\n"
-    index_md += f"**覆盖**: {len(turns)} 个 turn 摘要\n\n"
-    for t in turns:
+    index_md += f"**覆盖**: {len(valid_turns)} 个 turn 摘要\n\n"
+    for t in valid_turns:
         index_md += f"- [{t['title']}](../turns/{t['file_path'].split('turns/')[-1] if 'turns/' in t['file_path'] else t['file_path']})\n"
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(index_md)
@@ -146,7 +147,7 @@ def generate_daily(date_str: str, project: str, store: Store,
     # ── 日报正文：只有总结，不含来源清单 ──
     content = f"""# 日报: {date_str}
 **项目**: {project}
-**覆盖**: {len(turns)} 个 turn 摘要
+**覆盖**: {len(valid_turns)} 个 turn 摘要
 
 ## 今日主线
 {result.get('main_thread', '')}
@@ -171,7 +172,7 @@ def generate_daily(date_str: str, project: str, store: Store,
         result.get("title", f"日报 {date_str}"),
         content, source_turns
     )
-    out(f"  ✓ 日报: {date_str} / {project}  ({len(turns)} turns)")
+    out(f"  ✓ 日报: {date_str} / {project}  ({len(valid_turns)} turns)")
     return True
 
 

@@ -130,7 +130,7 @@ def main():
         print(out)   # 全量，不再只取末行
     else:
         # 纯文本兜底，不包 JSON（插件不吃 JSON 注入）
-        print("🐉 奶龙博士记忆系统已就绪。")
+        print("MIND 记忆系统已就绪。")
 
 
 if __name__ == "__main__":

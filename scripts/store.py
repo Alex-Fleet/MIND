@@ -120,6 +120,12 @@ class Store:
     def _ensure_schema(self):
         with sqlite3.connect(self.db_path) as conn:
             conn.executescript(DDL)
+            # 幂等加列: v1.0→v1.1 有效性分类
+            try:
+                conn.execute(
+                    "ALTER TABLE turn_summaries ADD COLUMN validity TEXT")
+            except sqlite3.OperationalError:
+                pass  # 列已存在
             conn.commit()
 
     # ── Sessions ────────────────────────────────────────
@@ -265,18 +271,19 @@ class Store:
                             title: str, summary: str,
                             key_decisions: list | None = None,
                             unfinished: list | None = None,
-                            retained_context: str = "") -> bool:
+                            retained_context: str = "",
+                            validity: str | None = None) -> bool:
         with sqlite3.connect(self.db_path) as conn:
             try:
                 conn.execute(
                     "INSERT INTO turn_summaries (session_id, turn_seq, project, "
                     "file_path, title, summary, key_decisions, unfinished, "
-                    "retained_context) VALUES (?,?,?,?,?,?,?,?,?)",
+                    "retained_context, validity) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (session_id, turn_seq, project, file_path,
                      title, summary,
                      json.dumps(key_decisions or [], ensure_ascii=False),
                      json.dumps(unfinished or [], ensure_ascii=False),
-                     retained_context)
+                     retained_context, validity)
                 )
                 conn.commit()
                 return True

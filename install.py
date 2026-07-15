@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-奶龙博士记忆系统 — 安装器
+MIND 记忆系统 — 安装器
 把本文件夹拷到任意位置后运行：  python3 install.py
 
 它会：
 1. 把 Stop + SessionStart 两个 hook 注册进你的 ~/.claude/settings.json
    （指向本文件夹的 hooks/，绝对路径当场算出，自动处理空格）
-2. 保留你 settings.json 里的其它设置，只替换奶龙自己的 hook 条目
+2. 保留你 settings.json 里的其它设置，只替换MIND自己的 hook 条目
 3. 装前自动备份 settings.json
 4. 检查 API 凭证并提示
 
@@ -35,7 +35,7 @@ def _is_nailong(entry: dict, script: str) -> bool:
 
 
 def main():
-    print(f"📦 奶龙博士项目位置：{PROJECT}")
+    print(f"📦 MIND项目位置：{PROJECT}")
 
     if SETTINGS.exists():
         try:
@@ -51,7 +51,7 @@ def main():
         settings = {}
         print("· 未发现 settings.json，将新建")
 
-    # 注册 hook：保留非奶龙的条目，替换奶龙自己的
+    # 注册 hook：保留非MIND的条目，替换MIND自己的
     hooks = settings.setdefault("hooks", {})
     for event, script in [("Stop", "on_stop.py"),
                           ("SessionStart", "on_session_start.py")]:
@@ -62,7 +62,7 @@ def main():
     SETTINGS.write_text(
         json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # 检查 API 凭证（奶龙的摘要要调 LLM）
+    # 检查 API 凭证（MIND的摘要要调 LLM）
     env = settings.get("env", {})
     has_key = bool(env.get("ANTHROPIC_AUTH_TOKEN")
                    or os.environ.get("ANTHROPIC_AUTH_TOKEN"))

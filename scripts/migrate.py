@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-One-time migration: old memory system → Nailong Doctor System.
+One-time migration: old memory system → MIND (MIND Is Not Diary).
 Reads old data READ-ONLY, writes to new system.
 Run once. Safe to re-run (idempotent).
 """
@@ -198,7 +198,7 @@ def main():
     paths = get_paths()
     store = Store()
 
-    print("🐉 奶龙博士系统 — 数据迁移")
+    print("MIND — 数据迁移")
     print(f"  时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print()
 

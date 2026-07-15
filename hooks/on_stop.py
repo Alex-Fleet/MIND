@@ -100,11 +100,11 @@ def build_broadcast(summ: dict | None, dig: dict | None) -> str:
     if monthly:
         parts.append("月报 " + "、".join(monthly) + " ✓")
 
-    return "🐉 记忆 · " + " ｜ ".join(parts)
+    return "MIND · " + " ｜ ".join(parts)
 
 
 def main():
-    log("🐉 奶龙博士 Stop hook")
+    log("MIND Stop hook")
 
     # Step 1: Ingest (fast, no LLM)
     log("[1/3] 摄入新对话...")
@@ -130,7 +130,7 @@ def main():
             bits.append(f"日报 ×{len(daily)}（{'、'.join(d[5:] for d in daily)}）")
         if monthly:
             bits.append(f"月报 ×{len(monthly)}（{'、'.join(monthly)}）")
-        notify("🐉 奶龙博士 · 报告已生成", " ｜ ".join(bits))
+        notify("MIND · 报告已生成", " ｜ ".join(bits))
 
     log("✓ Stop hook 完成")
 

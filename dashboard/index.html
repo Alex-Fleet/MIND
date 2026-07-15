@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>🐉 奶龙博士看板</title>
+<title>MIND 看板</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
@@ -44,7 +44,8 @@
   .b-turn{background:#4493f822;color:var(--turn)}
   .b-daily{background:#3fb95022;color:var(--daily)}
   .b-monthly{background:#bc8cff22;color:var(--monthly)}
-  .tag-noise{font-size:10px;color:var(--warn);border:1px solid var(--warn);
+  .tag-merged{font-size:10px;color:var(--muted);border:1px solid var(--border);padding:1px 6px;border-radius:5px;white-space:nowrap}
+	  .tag-noise{font-size:10px;color:var(--warn);border:1px solid var(--warn);
              padding:1px 6px;border-radius:5px;white-space:nowrap}
   .proj{font-size:11px;color:var(--muted);background:#ffffff0a;padding:2px 8px;border-radius:6px;
         white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
@@ -60,7 +61,7 @@
 <body>
 <header>
   <div class="top">
-    <div class="title"><span class="dot"></span>奶龙博士 · 记忆看板</div>
+    <div class="title"><span class="dot"></span>MIND · 记忆看板</div>
     <div class="spacer"></div>
     <span class="refresh" id="refresh">加载中…</span>
     <a class="btn" href="/projects" style="text-decoration:none">🗂 项目管理</a>
@@ -76,9 +77,15 @@
 <script>
 const S = { data:null, proj:"all", type:"all", ptype:"all", open:new Set(), hideNoise:true };
 
-// 无效记录：中断 / 无实际内容 / 空操作 / compact 压缩 等
-const NOISE=/(用户中断|中断，无|无实际内容|无内容|空操作|空会话|空.?会话|compact|compact命令|请求压缩|压缩空|执行压缩操作|纯粹回顾)/i;
-const isNoise=it=>NOISE.test(it.title||"")||NOISE.test((it.body||"").slice(0,40));
+// 无效记录：优先读后端 validity 字段，NULL 时回退前端正则（兼容 legacy 数据）
+const NOISE=/(用户中断|中断，无|无实际内容|无内容|空操作|空.?会话|空对话|compact|\/compact|对话压缩|会话压缩|记忆压缩|上下文压缩|内容压缩|历史压缩|压缩命令|压缩指令|压缩操作|压缩标记|压缩日志|压缩记录|压缩请求|压缩完成|压缩触发|压缩执行|纯粹回顾)/i;
+const isNoise=it=>{
+  if(it.validity==="invalid") return true;
+  if(it.validity==="valid"||it.validity==="low_value"||it.validity==="merged") return false;
+  // legacy: validity NULL → 正则回退
+  return NOISE.test(it.title||"")||NOISE.test((it.body||"").slice(0,40));
+};
+const isMerged=it=>it.validity==="merged";
 
 const pad=n=>String(n).padStart(2,"0");
 function fmt(iso){
@@ -132,15 +139,16 @@ function render(){
     !(S.hideNoise&&isNoise(it)));
   const list=document.getElementById("list");
   if(!rows.length){list.innerHTML=`<div class="empty">没有匹配的记录</div>`;return;}
-  list.innerHTML=rows.map(it=>{
-    const key=(it.file||"")+it.ts+it.title;
-    const open=S.open.has(key), noise=isNoise(it);
-    return `<div class="row ${noise?"noise":""}" onclick="toggle('${key.replace(/'/g,"")}')">
-      <div class="row-head">
-        <span class="time">${fmt(it.ts)}</span>
-        <span class="badge b-${it.type}">${TYPES[it.type]}</span>
-        ${noise?'<span class="tag-noise">无效</span>':""}
+    list.innerHTML=rows.map(it=>{
+      const key=(it.file||"")+it.ts+it.title;
+      const open=S.open.has(key), noise=isNoise(it), merged=isMerged(it);
+      return `<div class="row ${noise?"noise":""}" onclick="toggle('${key.replace(/'/g,"")}')">
+        <div class="row-head">
+          <span class="time">${fmt(it.ts)}</span>
+          <span class="badge b-${it.type}">${TYPES[it.type]}</span>
+          ${noise?'<span class="tag-noise">无效</span>':""}
         <span class="proj" title="${it.project}">${it.project_name}</span>
+        ${merged?'<span class="tag-merged">已合并</span>':""}
         <span class="ttl">${esc(it.title)}</span>
       </div>${open?`<div class="body">${it.user_input?`<div class="uin"><b>👤 用户</b>　${esc(it.user_input)}</div>`:""}${it.type==="turn"?"<b>📝 摘要</b>　":""}${esc(it.body||"")}${it.summarized_at?`<div class="meta">🕒 对话 ${fmt(it.ts)}　·　总结于 ${fmt(it.summarized_at)}</div>`:""}</div>`:""}</div>`;
   }).join("");

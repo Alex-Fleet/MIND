@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-奶龙博士看板 — 本地服务器（Python 标准库，零外部依赖，只绑 127.0.0.1）。
+MIND 看板 — 本地服务器（Python 标准库，零外部依赖，只绑 127.0.0.1）。
 
 路由：
   /            → 看板页面 dashboard/index.html
@@ -83,7 +83,8 @@ def build_feed():
     projects = [r[0] for r in conn.execute(
         "SELECT DISTINCT project FROM turn_summaries "
         "UNION SELECT DISTINCT project FROM daily_reports "
-        "UNION SELECT DISTINCT project FROM monthly_reports").fetchall()]
+        "UNION SELECT DISTINCT project FROM monthly_reports").fetchall()
+        if r[0]]  # 过滤空字符串（合并型 turn 等）
     pretty = _make_pretty(projects)
     reg, _ = _load_registry_with_source()
 
@@ -96,7 +97,7 @@ def build_feed():
 
     items = []
     for r in conn.execute(
-        "SELECT summarized_at, project, title, summary AS body, file_path, "
+        "SELECT summarized_at, project, title, summary AS body, file_path, validity, "
         "(SELECT substr(content,1,600) FROM turns t "
         " WHERE t.session_id=turn_summaries.session_id "
         " AND t.seq=turn_summaries.turn_seq AND t.role='user' LIMIT 1) AS user_input, "
@@ -109,7 +110,8 @@ def build_feed():
                       "summarized_at": _norm_ts(r["summarized_at"]),
                       "project": r["project"], "project_name": plabel(r["project"]), "project_type": ptype(r["project"]),
                       "title": r["title"], "body": r["body"],
-                      "user_input": r["user_input"], "file": r["file_path"]})
+                      "user_input": r["user_input"], "file": r["file_path"],
+                      "validity": r["validity"]})
     for r in conn.execute(
         "SELECT date, created_at, project, title, content AS body, file_path "
         "FROM daily_reports ORDER BY date DESC"):
@@ -344,7 +346,7 @@ def main():
     if "--port" in sys.argv:
         port = int(sys.argv[sys.argv.index("--port") + 1])
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"🐉 奶龙看板：http://127.0.0.1:{port}  (Ctrl-C 停)")
+    print(f"MIND 看板：http://127.0.0.1:{port}  (Ctrl-C 停)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

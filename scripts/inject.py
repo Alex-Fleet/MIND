@@ -37,9 +37,9 @@ def build_prefs_md(store: Store) -> str:
     """Build prefs.md from preferences table."""
     prefs = store.get_preferences()
     if not prefs:
-        return "# 奶龙博士记忆 — 用户偏好\n\n（暂无偏好设置）\n"
+        return "# MIND 记忆 — 用户偏好\n\n（暂无偏好设置）\n"
 
-    lines = ["# 奶龙博士记忆 — 用户偏好", ""]
+    lines = ["# MIND 记忆 — 用户偏好", ""]
     for p in prefs:
         section = p["section"]
         content = p["content"]
@@ -60,7 +60,7 @@ def build_brief_md(store: Store, project_slugs: list[str] | None = None) -> str:
     daily_days = cfg["windows"]["daily_days"]
 
     lines = [
-        f"# 奶龙博士记忆简报 — {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"# MIND 记忆简报 — {datetime.now().strftime('%Y-%m-%d %H:%M')}",
         "",
         "> 这是最近的工作动态摘要。如需深挖某件事，请 Read 箭头指向的 archive 文件。",
         "",
@@ -73,6 +73,9 @@ def build_brief_md(store: Store, project_slugs: list[str] | None = None) -> str:
         turn_days, project=project_slugs, limit=150)
     if turns:
         for t in turns:
+            v = t.get("validity")
+            if v in ("invalid", "merged"):
+                continue  # 噪音或已合并，不注入
             lines.append(f"### {t['title']}")
             lines.append(t["summary"])
             lines.append(f"→ [查看完整摘要](../data/archive/{t['file_path']})")
@@ -146,7 +149,7 @@ def build_system_message(store: Store, project_slugs: list[str] | None = None) -
 
     # ── Critical Preferences (compact) ──
     if critical_prefs:
-        lines.append("## 奶龙博士记忆 — 偏好")
+        lines.append("## MIND 记忆 — 偏好")
         lines.append("")
         for p in critical_prefs:
             lines.append(p["content"])

@@ -1,4 +1,4 @@
-# 架构 — 奶龙博士系统
+# 架构 — MIND
 
 ## 定位
 用户级全局记忆系统，让 Claude Code 每次新会话都能像旧会话无缝衔接。
@@ -9,15 +9,15 @@
 | 层 | 存哪 | 粒度 | 谁读 |
 |----|------|------|------|
 | **Claude Code 原生记忆** | `~/.claude/projects/<项目slug>/memory/*.md` | 每项目一个文件夹 | Claude Code 内建，按项目加载 |
-| **奶龙博士系统** | 本项目 `data/`（中心库 + 存档） | 全项目集中，`project` 字段区分 | 奶龙 hook 注入 |
+| **MIND** | 本项目 `data/`（中心库 + 存档） | 全项目集中，`project` 字段区分 | MIND hook 注入 |
 
-- **全局偏好/铁律** → 奶龙的 `preferences` 表 + `CLAUDE.md`，靠 SessionStart 全局注入。
-- **项目摘要** → 奶龙中心库 `turn_summaries` / `daily_reports` / `monthly_reports`，`project` 字段区分。
+- **全局偏好/铁律** → MIND的 `preferences` 表 + `CLAUDE.md`，靠 SessionStart 全局注入。
+- **项目摘要** → MIND中心库 `turn_summaries` / `daily_reports` / `monthly_reports`，`project` 字段区分。
 
 ## 数据流 / 依赖链
 
 ```
-① 原始聊天 JSONL（Claude Code 写的，奶龙只读不拥有）
+① 原始聊天 JSONL（Claude Code 写的，MIND只读不拥有）
    ~/.claude/projects/<slug>/*.jsonl
         │  ingest.py（文件I/O，无LLM）
         ▼
