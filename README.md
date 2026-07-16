@@ -79,22 +79,6 @@ python3 scripts/dashboard_server.py
 # 打开 http://127.0.0.1:8765
 ```
 
-## 快速开始（也是"拷给别人"的步骤）
-
-```bash
-# 1. 把整个项目文件夹拷到任意位置（分享时用 git / 打包，data/ 已被 .gitignore 挡掉）
-
-# 2. 注册 hook（自动写进 ~/.claude/settings.json，装前先备份）
-python3 install.py
-
-# 3. 填你自己的 API 凭证（若 settings.json 里还没有）
-#    ~/.claude/settings.json 的 env:
-#      "ANTHROPIC_AUTH_TOKEN": "sk-你自己的",
-#      "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic"
-
-# 4. 重启 Claude Code → 生效
-```
-
 ## 手动命令
 
 ```bash
@@ -144,56 +128,20 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 **一次性脚本**：`scripts/classify_0714.py`、`scripts/classify_sample.py`。
 
-### v1.0.0 — 首个正式版：注入隔离 + 日报重构 + 看板保活
+### v1.0.0 — 首个正式版：从零构建到生产可用
 
-> 本轮为系统从"骨架"到"正式可用"的完整交付。所有已知 bug 已修复，注入链路已验证通过。
+**核心架构**：SQLite 引擎 + Markdown 存档；时间金字塔（turn→日报→月报）；Stop + SessionStart 双 hook。
 
-**项目隔离（Phase 2a）**：注入上下文按项目过滤。Hook 从 stdin 读取 `transcript_path` 提取 CC 项目 slug → 注册表查询兄弟 slug → store 层 `WHERE project IN (...)` 过滤。注入量从全局 69K 降至本项目 40K 字，验证通过：其他项目内容零泄漏。
+**路径解耦与可移植**：系统从 `~/.claude/` 迁到独立工作区。`config.py` 的 `BASE_DIR` 相对化，新增可配 `DATA_DIR`；代码与数据分离。`install.py` 一键注册 hook，`config.example.json` 分享模板，`.gitignore` 挡掉私密数据。启动耗时从 >60s 降 0.3s（后台 detached 补漏替代同步 LLM 摘要）。
 
-**日报重构**：
-- 时间分桶改用 `turns.timestamp`（真实对话时间），不再按 `summarized_at`（处理时间）
-- 来源 turn 清单剥离到独立 `-index.md` 文件（渐进式披露），日报正文只存 ~1K 字总结
-- 存档文件名加项目 slug（`{date}-{project}.md`），消除同日不同项目覆盖问题
-- 注入层日报不再截断
+**看板 (dashboard)**：`dashboard_server.py`（Python 标准库，只读 DB，绑 `127.0.0.1`）+ 暗色前端。统一时间线（turn/日报/月报）、项目/类型筛选、噪音标注与一键隐藏。SessionStart 自动保活。
 
-**注入通道修复**：`inject.py` 输出从 JSON `{"systemMessage": "..."}` 改为纯文本。VS Code 扩展只吃 stdout 纯文本，JSON 包装会导致上下文不注入。经三轮金丝雀测试验证通过。
+**摘要引擎修复**：`build_turn_pairs` 严格按会话边界配对，杜绝跨会话粘连。时间排序统一用真实对话时间 `turns.timestamp`。
 
-**7-10 错误记忆清理**：删除旧系统（配对错乱）产生的 17 条 turn 摘要 + 1 篇日报，LLM 全量重摘要并重建日报。
+**LLM 稳健性加固**：`llm_utils` 区分致命错误（余额/认证→秒退）与瞬时错误（超时→退避重试）；`summarize.py` 加熔断。全程幂等可续传。
 
-**时间线排序修复**：`dashboard_server.py` 和 `recall.py` 的排序键统一从 `summarized_at` 改为 `turns.timestamp`（真实对话时间）。
+**注入通道**：`inject.py` 输出纯文本（VS Code 扩展只吃 stdout）；项目隔离（`WHERE project IN (...)` 过滤，注入量从 69K 降至 40K 字）。
 
-**看板保活**：SessionStart hook 自动检测 8765 端口，未监听则后台拉起 `dashboard_server.py`，开会话即看板在线。
+**日报重构**：时间分桶按真实对话时间；来源清单剥离独立 `-index.md`，正文只存 ~1K 字总结；文件名加项目 slug 防覆盖。
 
-**一次性脚本**：`scripts/rebuild_dailies.py`（日报全量重建）、`scripts/cleanup_0710.py`（7-10 错误记忆清理+重摘要）。
-
-### 2026-07-12 — 看板上线 + 稳健性加固 + 数据重建
-- **看板 (dashboard)**：新增 `dashboard_server.py`（Python 标准库，只读 DB，绑 127.0.0.1）
-  + 暗色前端 `dashboard/index.html`。统一时间线（turn/日报/月报）、项目/类型筛选、
-  无效记录标注与一键隐藏、手动刷新。补上 Claude Code 播报不渲染的缺口。
-- **摘要错配修复（根因）**：`build_turn_pairs` 改为严格按**会话边界**配对，杜绝跨会话粘连；
-  新增 `get_turns_ordered` / `get_summarized_keys`。修掉"用户输入与摘要张冠李戴"。
-- **时间轴修复**：看板 turn 时间改用**真实对话时间**（`turns.timestamp`），不再显示"总结时刻"。
-- **LLM 稳健性加固**：`llm_utils` 区分致命（401/402/403 余额/认证 → 抛 `LLMFatalError` 不重试）
-  与瞬时（超时/断网/5xx → 退避重试）；`summarize.py` 加熔断（致命秒退、连续失败中止），
-  全程幂等断点续。杜绝"余额不足空转一小时"。
-- **数据重建**：清空并用 `deepseek-v4-pro` 全量重刷 turn 摘要（config 默认模型 → pro，timeout → 60）。
-- **已知待办（下一步）**：注入尚未按项目隔离（跨项目污染）；日报月报按"总结时刻"分组、
-  批量重建会塌，需改真实时间键；项目 slug 存在"分身"，计划做项目注册表
-  （LLM 初步分类 + 用户拖拽调整 + 双向唯一校验）。
-
-### 2026-07-11 — 迁移到独立工作区 + 可移植化
-- **迁移**：系统从 `~/.claude/nailong_doctor_system/` 迁到独立工作区 `Memory Plugin/`。
-- **路径解耦**：`config.py` 的 `BASE_DIR` 改为相对 `__file__`；新增可配 `DATA_DIR`；
-  代码与数据分离，`data/` 走 `.gitignore`——**产品可分享，私密记忆留本地**。
-- **可移植**：新增 `install.py`（一键注册 hook）、`config.example.json`（分享模板）、`.gitignore`。
-- **修复 SessionStart 卡死**：去掉启动时同步 LLM 摘要（撞 60s 硬上限），改后台 detached 补漏，
-  启动耗时从 >60s 降到 0.3s。
-- **清理**：`on_stop.py` 去掉迁移期的诊断残留（心跳日志、临时测试通知）。
-- **切换**：`settings.json` 的 Stop + SessionStart 两个 hook 指向新工作区；SessionStart 从
-  旧系统 `~/.claude/memory/sync.py` 切成MIND自己的注入。
-- **已知问题**：Claude Code 扩展 2.1.207 存在 Stop-hook `systemMessage` 不渲染的 bug
-  （#50542，后端能解析、UI 不画）。对话内播报以此为准不可靠，可见播报改走看板(dashboard)。
-
-### 2026-07-10 — 首次构建
-- SQLite 引擎 + Markdown 存档；时间金字塔（turn→日报→月报）。
-- Stop + SessionStart 双 hook；迁移旧系统 9616 对话 + 10 记忆 + 13 偏好。
+**迁移**：从旧系统吞入 9616 对话 + 10 记忆 + 13 偏好；清理 7-10 错误记忆（17 条错配摘要+1篇日报，LLM 全量重摘要）。
