@@ -33,21 +33,66 @@ def _resolve_project_slugs(slug: str) -> list[str] | None:
     return [slug]  # unregistered slug: inject only its own memories
 
 
-def build_prefs_md(store: Store) -> str:
-    """Build prefs.md from preferences table."""
-    prefs = store.get_preferences()
-    if not prefs:
-        return "# MIND 记忆 — 用户偏好\n\n（暂无偏好设置）\n"
+def _heading_from_file(fpath: Path) -> str:
+    """Extract heading from the first '# Title' line of a markdown file.
+    Falls back to stem-to-title if no # line found."""
+    try:
+        first = fpath.read_text(encoding="utf-8").strip().split("\n")[0]
+        if first.startswith("# "):
+            return first[2:].strip()
+    except Exception:
+        pass
+    # Fallback: filename stem → Title Case
+    return fpath.stem.replace("-", " ").replace("_", " ").title()
 
-    lines = ["# MIND 记忆 — 用户偏好", ""]
-    for p in prefs:
-        section = p["section"]
-        content = p["content"]
-        if not content.strip():
+
+def _read_memory_dir(memory_dir: Path) -> list[tuple[str, str]]:
+    """Glob *.md in a directory, return [(heading, content), ...] sorted by filename.
+    Returns empty list if directory doesn't exist."""
+    if not memory_dir.is_dir():
+        return []
+    results = []
+    for fpath in sorted(memory_dir.glob("*.md")):
+        try:
+            content = fpath.read_text(encoding="utf-8").strip()
+            if content:
+                heading = _heading_from_file(fpath)
+                results.append((heading, content))
+        except Exception:
             continue
-        lines.append(f"## {section}")
-        lines.append(content)
-        lines.append("")
+    return results
+
+
+def _resolve_project_id(slug: str | None) -> str | None:
+    """CC slug → stable project id (via Registry). Unregistered → slug itself."""
+    if not slug:
+        return None
+    reg = Registry.load()
+    return reg.resolve(slug) or slug
+
+
+def build_prefs_md(store: Store | None = None) -> str:
+    """Build prefs.md from memory/ markdown files (editable source of truth).
+    Two-tier: memory/global/*.md (always) + memory/projects/<id>/*.md (per-project).
+    Falls back to flat memory/*.md if global/ doesn't exist yet (upgrade compat)."""
+    memory_dir = get_paths()["base_dir"] / "memory"
+    global_dir = memory_dir / "global"
+    lines = ["# MIND 记忆 — 用户偏好", ""]
+
+    # ── Global memory ──
+    if global_dir.is_dir():
+        for heading, content in _read_memory_dir(global_dir):
+            lines.append(content)
+            lines.append("")
+    else:
+        # Backward compat: flat files at memory/ root
+        for heading, content in _read_memory_dir(memory_dir):
+            # Skip .example files
+            if ".example" in str(heading):
+                continue
+            lines.append(content)
+            lines.append("")
+
     return "\n".join(lines)
 
 
@@ -137,25 +182,46 @@ def rebuild_injected(store: Store, paths: dict) -> dict:
 
 
 def build_system_message(store: Store, project_slugs: list[str] | None = None) -> str:
-    """Build the systemMessage markdown for Claude Code injection."""
-    prefs = store.get_preferences()
-
-    # Only include the most critical preferences (priority >= 70)
-    # to keep systemMessage concise. Full prefs always available
-    # in injected/prefs.md + CLAUDE.md
-    critical_prefs = [p for p in prefs if p.get("priority", 0) >= 70]
-
+    """Build the systemMessage markdown for Claude Code injection.
+    Two-tier memory: memory/global/*.md (always) + memory/projects/<id>/*.md (per-project).
+    Falls back to flat memory/*.md if global/ doesn't exist yet (upgrade compat)."""
+    memory_dir = get_paths()["base_dir"] / "memory"
+    global_dir = memory_dir / "global"
     lines = []
 
-    # ── Critical Preferences (compact) ──
-    if critical_prefs:
-        lines.append("## MIND 记忆 — 偏好")
-        lines.append("")
-        for p in critical_prefs:
-            lines.append(p["content"])
-        lines.append("")
+    # ── Global Memory ──
+    if global_dir.is_dir():
+        for heading, content in _read_memory_dir(global_dir):
+            lines.append(f"## MIND 记忆 — {heading}")
+            lines.append("")
+            lines.append(content)
+            lines.append("")
+    else:
+        # Backward compat: flat files at memory/ root
+        for heading, content in _read_memory_dir(memory_dir):
+            if ".example" in str(heading):
+                continue
+            lines.append(f"## MIND 记忆 — {heading}")
+            lines.append("")
+            lines.append(content)
+            lines.append("")
 
-    # ── Brief ──
+    # ── Project Memory ──
+    if project_slugs:
+        project_id = _resolve_project_id(project_slugs[0])
+        project_dir = memory_dir / "projects" / (project_id or "")
+        if project_dir.is_dir():
+            entries = _read_memory_dir(project_dir)
+            if entries:
+                reg = Registry.load()
+                label = reg.label_of(project_id) if project_id else project_id
+                lines.append(f"## MIND 记忆 — 项目: {label}")
+                lines.append("")
+                for _heading, content in entries:
+                    lines.append(content)
+                    lines.append("")
+
+    # ── Brief (from DB, project-filtered) ──
     brief = build_brief_md(store, project_slugs=project_slugs)
     lines.append(brief)
 

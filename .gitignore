@@ -16,6 +16,10 @@ config.json
 # ── CLAUDE.md — MIND 生成，含用户个人铁律 ──
 CLAUDE.md
 
+# ── 全局记忆 — 用户可编辑，含个人信息 ──
+memory/global/*.md
+memory/projects/**/*.md
+
 # ── 用户私有的项目注册表（slug 分身映射 + 标签），出厂应为空 ──
 projects.json
 projects.draft.json

@@ -108,6 +108,14 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.3.0 — 全局记忆文件化 + 项目隔离注入
+
+- DB `preferences` 表迁至可编辑 `memory/global/*.md`（用户铁律/技能/偏好）
+- 新增 `memory/projects/<id>/*.md` 项目专属记忆，Registry id 匹配注入
+- `inject.py` 两层 glob（global 全量 + project 按 id），加文件不改代码
+- 新增 `agenting-skills.md`（Agent 编排/RAG/LLM 边界/容错），泛化跨项目经验
+- ARCHITECTURE.md 同步更新；`.gitignore` 挡掉记忆内容，`.example.md` 模板进 git
+
 ### v1.2.1 — README 清理：删冗余段落 + 整合早期 changelog
 
 删除了与"安装"章节重复的"快速开始（拷给别人）"段落。将 v1.0.0 之前三个日期条目（2026-07-10/11/12）整合进 v1.0.0，形成统一的首版说明。
