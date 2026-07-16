@@ -108,6 +108,19 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.2.1 — README 清理：删冗余段落 + 整合早期 changelog
+
+删除了与"安装"章节重复的"快速开始（拷给别人）"段落。将 v1.0.0 之前三个日期条目（2026-07-10/11/12）整合进 v1.0.0，形成统一的首版说明。
+
+### v1.2.0 — 开源准备：依赖声明 + 安装器完善 + 脱敏
+
+- 新增 `requirements.txt`（唯一外部依赖 `requests`）
+- 新增 `CLAUDE.example.md` 模板
+- `.gitignore` 新增 `config.json`、`CLAUDE.md`、`.claude/`、`*.pyc`
+- `config.json` 和 `CLAUDE.md` 停止 git 追踪（脱敏），`install.py` 自动从模板创建
+- `install.py` 新增依赖检查 + 自动创建用户配置文件
+- README 新增"安装"章节（前置要求 → pip → 配置 → 验证）
+
 ### v1.1.0 — 有效性分类 + 延续合并 + 噪声覆盖 + 项目更名
 
 **项目更名**：奶龙博士 → **MIND (MIND Is Not Diary)**。
