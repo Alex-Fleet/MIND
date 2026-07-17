@@ -102,6 +102,53 @@ CREATE TABLE IF NOT EXISTS operation_log (
     detail          TEXT,
     created_at      TEXT DEFAULT (datetime('now'))
 );
+
+-- v1.4: 全局记忆生命周期管理
+CREATE TABLE IF NOT EXISTS memory_registry (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_path       TEXT NOT NULL,
+    section_heading TEXT,
+    scope           TEXT NOT NULL,
+    base_weight     REAL DEFAULT 0.40,
+    confirmed_count INTEGER DEFAULT 0,
+    last_confirmed  TEXT,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now')),
+    status          TEXT DEFAULT 'active',
+    UNIQUE(file_path, section_heading)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mr_scope ON memory_registry(scope);
+CREATE INDEX IF NOT EXISTS idx_mr_status ON memory_registry(status);
+
+CREATE TABLE IF NOT EXISTS memory_proposals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    action          TEXT NOT NULL,
+    scope           TEXT NOT NULL,
+    target_path     TEXT,
+    target_section  TEXT,
+    title           TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    reason          TEXT,
+    conflicts       TEXT,
+    source_dates    TEXT,
+    related_registry_ids TEXT,
+    confidence      REAL DEFAULT 0.5,
+    status          TEXT DEFAULT 'pending',
+    created_at      TEXT DEFAULT (datetime('now')),
+    reviewed_at     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_mp_status ON memory_proposals(status);
+
+CREATE TABLE IF NOT EXISTS weight_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    registry_id     INTEGER NOT NULL REFERENCES memory_registry(id),
+    event           TEXT NOT NULL,
+    base_weight_before REAL,
+    base_weight_after  REAL,
+    created_at      TEXT DEFAULT (datetime('now'))
+);
 """
 
 # ── Public API ──────────────────────────────────────────────
@@ -519,6 +566,180 @@ class Store:
                  json.dumps(detail or {}, ensure_ascii=False))
             )
             conn.commit()
+
+    # ── Memory Registry (v1.4) ────────────────────────────
+
+    def upsert_registry_entry(self, file_path: str,
+                              section_heading: str | None,
+                              scope: str,
+                              base_weight: float = 0.40) -> int | None:
+        """Insert or update a registry entry. Returns the entry id."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "INSERT OR REPLACE INTO memory_registry "
+                "(file_path, section_heading, scope, base_weight, "
+                " updated_at) "
+                "VALUES (?, ?, ?, ?, datetime('now'))",
+                (file_path, section_heading, scope, base_weight)
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_registry_entries(self, scope: str | None = None,
+                             status: str = 'active',
+                             file_path: str | None = None) -> list[dict]:
+        """Get registry entries, optionally filtered by scope, status, file_path."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            conditions = ["status = ?"]
+            params = [status]
+            if scope:
+                conditions.append("scope = ?")
+                params.append(scope)
+            if file_path:
+                conditions.append("file_path = ?")
+                params.append(file_path)
+            where = " AND ".join(conditions)
+            rows = conn.execute(
+                f"SELECT * FROM memory_registry WHERE {where} "
+                "ORDER BY scope, base_weight DESC",
+                params
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_registry_entry(self, file_path: str,
+                           section_heading: str | None = None) -> dict | None:
+        """Get a single registry entry by path and optional section."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM memory_registry "
+                "WHERE file_path = ? AND section_heading IS ?",
+                (file_path, section_heading)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def update_registry_weight(self, entry_id: int,
+                                base_weight: float,
+                                last_confirmed: str | None = None,
+                                confirmed_delta: int = 0) -> bool:
+        """Update base_weight and optionally last_confirmed / confirmed_count."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE memory_registry SET base_weight = ?, "
+                "confirmed_count = confirmed_count + ?, "
+                "last_confirmed = COALESCE(?, last_confirmed), "
+                "updated_at = datetime('now') "
+                "WHERE id = ?",
+                (base_weight, confirmed_delta, last_confirmed, entry_id)
+            )
+            conn.commit()
+            return True
+
+    def update_registry_status(self, entry_id: int, status: str) -> bool:
+        """Update registry entry status (active/stale/deleted)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE memory_registry SET status = ?, "
+                "updated_at = datetime('now') WHERE id = ?",
+                (status, entry_id)
+            )
+            conn.commit()
+            return True
+
+    # ── Memory Proposals (v1.4) ────────────────────────────
+
+    def insert_memory_proposal(self, action: str, scope: str,
+                               title: str, content: str,
+                               target_path: str | None = None,
+                               target_section: str | None = None,
+                               reason: str | None = None,
+                               conflicts: str | None = None,
+                               source_dates: str | None = None,
+                               related_registry_ids: str | None = None,
+                               confidence: float = 0.5) -> int:
+        """Insert a new memory proposal. Returns the id."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "INSERT INTO memory_proposals "
+                "(action, scope, target_path, target_section, title, content, "
+                " reason, conflicts, source_dates, related_registry_ids, "
+                " confidence, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                (action, scope, target_path, target_section, title, content,
+                 reason, conflicts, source_dates, related_registry_ids,
+                 confidence)
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_proposals(self, status: str | None = None) -> list[dict]:
+        """Get proposals, optionally filtered by status."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if status:
+                rows = conn.execute(
+                    "SELECT * FROM memory_proposals WHERE status = ? "
+                    "ORDER BY created_at DESC",
+                    (status,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM memory_proposals "
+                    "ORDER BY created_at DESC"
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+    def update_proposal_status(self, proposal_id: int, status: str,
+                               reviewed_at: str | None = None) -> bool:
+        """Update proposal status and reviewed_at timestamp."""
+        with sqlite3.connect(self.db_path) as conn:
+            ts = reviewed_at or "datetime('now')"
+            conn.execute(
+                "UPDATE memory_proposals SET status = ?, "
+                f"reviewed_at = {ts} WHERE id = ?",
+                (status, proposal_id)
+            )
+            conn.commit()
+            return True
+
+    # ── Weight Log (v1.4) ──────────────────────────────────
+
+    def insert_weight_log(self, registry_id: int, event: str,
+                          before: float, after: float) -> int:
+        """Log a weight change event. Returns the log id."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "INSERT INTO weight_log (registry_id, event, "
+                "base_weight_before, base_weight_after) "
+                "VALUES (?, ?, ?, ?)",
+                (registry_id, event, before, after)
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_weight_history(self, registry_id: int) -> list[dict]:
+        """Get weight change history for a registry entry."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM weight_log WHERE registry_id = ? "
+                "ORDER BY created_at ASC",
+                (registry_id,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    # ── Proposal Run Tracking (v1.4) ────────────────────────
+
+    def get_last_proposal_run(self) -> str | None:
+        """Get timestamp of last proposal run."""
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT created_at FROM operation_log "
+                "WHERE operation = 'propose_memories' "
+                "ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+            return row[0] if row else None
 
     # ── Stats ─────────────────────────────────────────────
 

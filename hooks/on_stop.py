@@ -60,6 +60,20 @@ def run_json(script: str, *args, timeout: int = 30):
         return None
 
 
+def spawn_propose() -> None:
+    """后台触发记忆提案（detached 进程），不阻塞 Stop hook。
+    与 spawn_background_catchup 同模式。
+    只在有新增日报/月报时调用。"""
+    try:
+        subprocess.Popen(
+            [PYTHON, os.path.join(SCRIPTS, "propose_memories.py")],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as e:
+        log(f"  ⚠ 提案 agent 启动失败: {e}")
+
+
 def notify(title: str, message: str) -> None:
     """macOS 原生通知（仅日报/月报这类少见、重要事件）。失败静默。"""
     try:
@@ -121,7 +135,7 @@ def main():
     log("[3/3] 检查日报/月报...")
     dig = run_json("digest.py", "--check", "--json", timeout=30)
 
-    # 日报/月报（少见、重要）→ macOS 原生通知
+    # 日报/月报（少见、重要）→ macOS 原生通知 + 后台记忆提案
     daily = (dig or {}).get("daily", [])
     monthly = (dig or {}).get("monthly", [])
     if daily or monthly:
@@ -131,6 +145,8 @@ def main():
         if monthly:
             bits.append(f"月报 ×{len(monthly)}（{'、'.join(monthly)}）")
         notify("MIND · 报告已生成", " ｜ ".join(bits))
+        # 后台触发记忆提案（detached，不阻塞）
+        spawn_propose()
 
     log("✓ Stop hook 完成")
 

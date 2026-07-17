@@ -22,6 +22,8 @@ from urllib.parse import urlparse, parse_qs
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths, load_config, BASE_DIR
 from projects import Registry, slugify_id, basename_key, VALID_TYPES
+from memory_registry import effective_weight
+from store import Store
 
 PATHS = get_paths()
 DB = str(PATHS["db_path"])
@@ -279,6 +281,335 @@ def fs_list(path):
     return {"path": base, "parent": parent if parent != base else None, "dirs": dirs}
 
 
+# ── Memory Proposals & Registry API (v1.4) ──────────────────
+
+
+def _mproposal_to_dict(row, store) -> dict:
+    """Convert a memory_proposals sqlite3.Row to a dict."""
+    d = dict(row)
+    # Parse JSON fields
+    for field in ("conflicts", "source_dates", "related_registry_ids"):
+        if d.get(field) and isinstance(d[field], str):
+            try:
+                d[field] = __import__("json").loads(d[field])
+            except Exception:
+                pass
+    return d
+
+
+def build_proposals(status_filter: str | None = None):
+    """List memory proposals, optionally filtered by status."""
+    with __import__("sqlite3").connect(
+        f"file:{DB}?mode=ro", uri=True, timeout=5
+    ) as conn:
+        conn.row_factory = __import__("sqlite3").Row
+        if status_filter:
+            rows = conn.execute(
+                "SELECT * FROM memory_proposals WHERE status = ? "
+                "ORDER BY created_at DESC",
+                (status_filter,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM memory_proposals "
+                "ORDER BY created_at DESC"
+            ).fetchall()
+        store = Store()
+        proposals = [_mproposal_to_dict(r, store) for r in rows]
+        # Count pending for badge
+        pending_count = sum(
+            1 for p in proposals if p.get("status") == "pending"
+        )
+        return {"proposals": proposals, "pending_count": pending_count,
+                "total": len(proposals)}
+
+
+def apply_proposal(payload: dict):
+    """Approve or reject a memory proposal.
+
+    approve: write to memory/ file, update registry, mark approved.
+    reject: mark rejected.
+    """
+    store = Store()
+    pid = payload.get("id")
+    action = payload.get("action")
+
+    if not pid or action not in ("approve", "reject"):
+        return False, "Missing id or invalid action"
+
+    if action == "reject":
+        store.update_proposal_status(pid, "rejected")
+        return True, "Rejected"
+
+    # Approve
+    proposal_rows = _get_proposal_by_id(pid)
+    if not proposal_rows:
+        return False, "Proposal not found"
+
+    prop = dict(proposal_rows[0])
+
+    # Handle delete proposals: remove from file + mark registry
+    if prop.get("action") == "delete":
+        target_path = prop.get("target_path", "")
+        target_section = prop.get("target_section")
+
+        # 1. Remove content from markdown file
+        if target_path:
+            full_path = BASE_DIR / target_path
+            if full_path.exists():
+                existing = full_path.read_text(encoding="utf-8")
+                if target_section:
+                    updated = _remove_section(existing, target_section)
+                    if updated is not None:
+                        full_path.write_text(updated, encoding="utf-8")
+                else:
+                    # Whole-file delete: clear file, leave a tombstone comment
+                    full_path.write_text(
+                        f"<!-- DELETED: {prop.get('title', 'untitled')} -->\n",
+                        encoding="utf-8"
+                    )
+
+        # 2. Mark registry entry as deleted
+        with __import__("sqlite3").connect(store.db_path) as conn:
+            conn.execute(
+                "UPDATE memory_registry SET status = 'deleted', "
+                "updated_at = datetime('now') "
+                "WHERE file_path = ? AND section_heading IS ?",
+                (target_path, target_section)
+            )
+            conn.commit()
+        store.update_proposal_status(pid, "approved")
+        return True, "Deleted"
+
+    # Create/update/upgrade/downgrade: write to memory/ file
+    edited = payload.get("edited_content")
+    content = edited or prop.get("content", "")
+    target_path = prop.get("target_path", "")
+
+    if target_path and content:
+        full_path = BASE_DIR / target_path
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if prop.get("action") in ("create", "upgrade", "downgrade"):
+            # Append new section to file (or create file)
+            if full_path.exists():
+                existing = full_path.read_text(encoding="utf-8")
+                if existing and not existing.endswith("\n"):
+                    existing += "\n"
+                full_path.write_text(
+                    existing + "\n" + content + "\n", encoding="utf-8"
+                )
+            else:
+                title = prop.get("title", "Untitled")
+                full_path.write_text(
+                    f"# {title}\n\n{content}\n", encoding="utf-8"
+                )
+
+            # Add to registry
+            from memory_registry import init_registry
+            # Re-scan just this file
+            scope = prop.get("scope", "global")
+            store.upsert_registry_entry(
+                file_path=target_path,
+                section_heading=prop.get("target_section"),
+                scope=scope,
+                base_weight=0.40,
+            )
+
+        elif prop.get("action") == "update":
+            # Replace existing section
+            target_section = prop.get("target_section", "")
+            if full_path.exists():
+                existing = full_path.read_text(encoding="utf-8")
+                updated = _replace_section(existing, target_section, content)
+                full_path.write_text(updated, encoding="utf-8")
+
+            # Confirm the registry entry (boosts weight)
+            from memory_registry import confirm
+            reg_entry = store.get_registry_entry(
+                target_path, prop.get("target_section")
+            )
+            if reg_entry:
+                confirm(reg_entry["id"], store)
+
+    store.update_proposal_status(pid, "approved")
+    return True, "Approved"
+
+
+def build_registry():
+    """List all memory registry entries with effective weights."""
+    store = Store()
+    entries = store.get_registry_entries(status="active")
+    result = []
+    for e in entries:
+        w = effective_weight(
+            e["base_weight"],
+            e.get("last_confirmed"),
+            e.get("created_at"),
+        )
+        ts_str = e.get("last_confirmed") or e.get("created_at", "")
+        days = _days_since(ts_str) if ts_str else 0
+
+        e["effective_weight"] = round(w, 4)
+        e["days_since_confirmed"] = days
+        e["weight_status"] = (
+            "healthy" if w >= 0.30 else
+            "warning" if w >= 0.15 else
+            "critical"
+        )
+        result.append(e)
+
+    # Group by scope
+    grouped = {}
+    for e in result:
+        scope = e.get("scope", "unknown")
+        grouped.setdefault(scope, []).append(e)
+
+    return {"registry": result, "by_scope": grouped,
+            "total": len(result)}
+
+
+def build_weight_history(registry_id: int):
+    """Return weight change history for a registry entry."""
+    store = Store()
+    history = store.get_weight_history(registry_id)
+    # Also get the current entry info
+    entry = None
+    with __import__("sqlite3").connect(store.db_path) as conn:
+        conn.row_factory = __import__("sqlite3").Row
+        row = conn.execute(
+            "SELECT * FROM memory_registry WHERE id = ?",
+            (registry_id,)
+        ).fetchone()
+        if row:
+            entry = dict(row)
+
+    # Compute effective weight at each log point
+    enriched = []
+    for h in history:
+        bw = h["base_weight_after"]
+        ts = h["created_at"]
+        w = effective_weight(bw, ts)
+        enriched.append({
+            "date": ts,
+            "base_weight": bw,
+            "effective_weight": round(w, 4),
+            "event": h["event"],
+        })
+
+    return {
+        "registry_id": registry_id,
+        "entry": entry,
+        "history": enriched,
+    }
+
+
+def _get_proposal_by_id(pid: int):
+    """Get a proposal row by id."""
+    with __import__("sqlite3").connect(
+        f"file:{DB}?mode=ro", uri=True, timeout=5
+    ) as conn:
+        conn.row_factory = __import__("sqlite3").Row
+        return conn.execute(
+            "SELECT * FROM memory_proposals WHERE id = ?", (pid,)
+        ).fetchall()
+
+
+def _replace_section(content: str, target_section: str,
+                     new_content: str) -> str:
+    """Replace a ## section within markdown content.
+
+    Finds `target_section` and replaces its body up to the next ## heading.
+    If the section isn't found, appends new_content at the end.
+    """
+    if not target_section:
+        return content + "\n" + new_content + "\n"
+
+    lines = content.split("\n")
+    in_target = False
+    result = []
+    found = False
+
+    for line in lines:
+        if line.strip().startswith("## ") and not line.strip().startswith("### "):
+            if in_target:
+                # End of target section — insert new content
+                result.append(new_content)
+                result.append("")
+                in_target = False
+            if line.strip()[3:].strip() == target_section.strip().lstrip("#").strip():
+                in_target = True
+                result.append(line)
+                found = True
+                continue
+        if not in_target:
+            result.append(line)
+
+    # Section was last in file
+    if in_target:
+        result.append(new_content)
+        result.append("")
+
+    if found:
+        return "\n".join(result)
+    # Not found: append
+    return content.rstrip() + "\n\n" + new_content + "\n"
+
+
+def _remove_section(content: str, target_section: str) -> str | None:
+    """Remove a ## section (heading + body) from markdown.
+
+    Returns updated content, or None if section not found.
+    Strips the section heading line and all its body lines up to the
+    next ## heading (or EOF). Trailing blank lines are cleaned up.
+    """
+    clean_heading = target_section.strip().lstrip("#").strip()
+    lines = content.split("\n")
+    result = []
+    in_target = False
+    found = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("## ") and not stripped.startswith("### "):
+            if in_target:
+                in_target = False
+            if stripped[3:].strip() == clean_heading:
+                in_target = True
+                found = True
+                continue  # skip this line (the heading)
+        if not in_target:
+            result.append(line)
+
+    if not found:
+        return None
+
+    # Clean up trailing blank lines left by removal
+    while result and result[-1].strip() == "":
+        result.pop()
+    if result:
+        result.append("")  # single trailing newline
+
+    return "\n".join(result)
+
+
+def _days_since(ts_str: str) -> int:
+    """Compute days since an ISO timestamp."""
+    from datetime import datetime, timezone
+    try:
+        ts = __import__("datetime").datetime.fromisoformat(
+            ts_str.replace("Z", "+00:00")
+        )
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return max(0, int(
+            (__import__("datetime").datetime.now(timezone.utc) - ts
+             ).total_seconds() / 86400.0
+        ))
+    except Exception:
+        return 0
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype):
         data = body.encode("utf-8") if isinstance(body, str) else body
@@ -312,6 +643,30 @@ class Handler(BaseHTTPRequestHandler):
                 q = parse_qs(urlparse(self.path).query)
                 self._send(200, json.dumps(fs_list((q.get("path") or [""])[0]),
                            ensure_ascii=False), "application/json; charset=utf-8")
+            elif self.path.startswith("/api/memory-registry/") and \
+                 "/history" in self.path:
+                # /api/memory-registry/<id>/history
+                parts = [x for x in self.path.split("/") if x]
+                try:
+                    rid = int(parts[-2]) if parts[-1] == "history" else None
+                except (ValueError, IndexError):
+                    rid = None
+                if rid:
+                    self._send(200, json.dumps(
+                        build_weight_history(rid), ensure_ascii=False
+                    ), "application/json; charset=utf-8")
+                else:
+                    self._send(400, '{"error":"invalid id"}',
+                               "application/json; charset=utf-8")
+            elif self.path.startswith("/api/memory-registry"):
+                self._send(200, json.dumps(build_registry(), ensure_ascii=False),
+                           "application/json; charset=utf-8")
+            elif self.path.startswith("/api/memory-proposals"):
+                q = parse_qs(urlparse(self.path).query)
+                status = (q.get("status") or [None])[0]
+                self._send(200, json.dumps(
+                    build_proposals(status), ensure_ascii=False
+                ), "application/json; charset=utf-8")
             elif p in ("/", "/index.html"):
                 self._serve_html(HTML, "dashboard/index.html 不存在")
             elif p in ("/projects", "/projects.html"):
@@ -323,13 +678,39 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.path.split("?")[0].rstrip("/") == "/api/projects":
-                n = int(self.headers.get("Content-Length", 0) or 0)
-                body = self.rfile.read(n).decode("utf-8") if n else "{}"
-                ok, errs = save_projects(json.loads(body))
+            p = self.path.split("?")[0].rstrip("/")
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            body = self.rfile.read(n).decode("utf-8") if n else "{}"
+            payload = json.loads(body)
+
+            if p == "/api/projects":
+                ok, errs = save_projects(payload)
                 self._send(200 if ok else 400,
                            json.dumps({"ok": ok, "errors": errs}, ensure_ascii=False),
                            "application/json; charset=utf-8")
+            elif p == "/api/memory-proposals":
+                ok, msg = apply_proposal(payload)
+                self._send(200 if ok else 400,
+                           json.dumps({"ok": ok, "message": msg}, ensure_ascii=False),
+                           "application/json; charset=utf-8")
+            elif p.startswith("/api/memory-registry/") and p.endswith("/confirm"):
+                # Manual confirm from dashboard: /api/memory-registry/<id>/confirm
+                parts = [x for x in p.split("/") if x]
+                try:
+                    rid = int(parts[-2])
+                except (ValueError, IndexError):
+                    rid = None
+                if rid:
+                    from memory_registry import confirm
+                    new_w = confirm(rid)
+                    self._send(200,
+                               json.dumps({"ok": True,
+                                           "new_base_weight": new_w},
+                                          ensure_ascii=False),
+                               "application/json; charset=utf-8")
+                else:
+                    self._send(400, '{"error":"invalid id"}',
+                               "application/json; charset=utf-8")
             else:
                 self._send(404, "not found", "text/plain; charset=utf-8")
         except Exception as e:

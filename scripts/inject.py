@@ -46,9 +46,13 @@ def _heading_from_file(fpath: Path) -> str:
     return fpath.stem.replace("-", " ").replace("_", " ").title()
 
 
-def _read_memory_dir(memory_dir: Path) -> list[tuple[str, str]]:
-    """Glob *.md in a directory, return [(heading, content), ...] sorted by filename.
+def _read_memory_dir(memory_dir: Path, base_dir: Path | None = None
+                     ) -> list[tuple[str, str, str]]:
+    """Glob *.md in a directory, return [(heading, content, rel_path), ...]
+    sorted by filename.  rel_path is relative to base_dir (or memory_dir).
     Returns empty list if directory doesn't exist."""
+    if base_dir is None:
+        base_dir = memory_dir
     if not memory_dir.is_dir():
         return []
     results = []
@@ -57,10 +61,56 @@ def _read_memory_dir(memory_dir: Path) -> list[tuple[str, str]]:
             content = fpath.read_text(encoding="utf-8").strip()
             if content:
                 heading = _heading_from_file(fpath)
-                results.append((heading, content))
+                rel = str(fpath.relative_to(base_dir))
+                results.append((heading, content, rel))
         except Exception:
             continue
     return results
+
+
+def _get_deleted_sections(store: Store, file_path: str) -> set[str | None]:
+    """Return set of section_headings marked 'deleted' for a given file.
+    None in the set means the whole file is deleted."""
+    entries = store.get_registry_entries(
+        file_path=file_path, status="deleted"
+    )
+    return {e.get("section_heading") for e in entries}
+
+
+def _strip_deleted_from_content(content: str,
+                                 deleted_sections: set[str | None]) -> str:
+    """Remove deleted sections from markdown content.
+    If None is in deleted_sections, the whole file is deleted → return ''."""
+    if None in deleted_sections:
+        return ""
+    if not deleted_sections:
+        return content
+
+    for section in deleted_sections:
+        if not section:
+            continue
+        clean = section.strip().lstrip("#").strip()
+        lines = content.split("\n")
+        result = []
+        skip = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("## ") and not stripped.startswith("### "):
+                if skip:
+                    skip = False
+                if stripped[3:].strip() == clean:
+                    skip = True
+                    continue
+            if not skip:
+                result.append(line)
+        # Clean trailing blanks
+        while result and result[-1].strip() == "":
+            result.pop()
+        if result:
+            result.append("")
+        content = "\n".join(result)
+
+    return content
 
 
 def _resolve_project_id(slug: str | None) -> str | None:
@@ -81,17 +131,33 @@ def build_prefs_md(store: Store | None = None) -> str:
 
     # ── Global memory ──
     if global_dir.is_dir():
-        for heading, content in _read_memory_dir(global_dir):
-            lines.append(content)
-            lines.append("")
+        for heading, content, rel_path in _read_memory_dir(
+            global_dir, memory_dir
+        ):
+            # Safety net: strip registry-deleted sections
+            full_path = f"memory/{rel_path}"
+            deleted = _get_deleted_sections(
+                store, full_path
+            ) if store else set()
+            if deleted:
+                content = _strip_deleted_from_content(content, deleted)
+            if content.strip():
+                lines.append(content)
+                lines.append("")
     else:
         # Backward compat: flat files at memory/ root
-        for heading, content in _read_memory_dir(memory_dir):
-            # Skip .example files
+        for heading, content, rel_path in _read_memory_dir(memory_dir):
             if ".example" in str(heading):
                 continue
-            lines.append(content)
-            lines.append("")
+            full_path = f"memory/{rel_path}"
+            deleted = _get_deleted_sections(
+                store, full_path
+            ) if store else set()
+            if deleted:
+                content = _strip_deleted_from_content(content, deleted)
+            if content.strip():
+                lines.append(content)
+                lines.append("")
 
     return "\n".join(lines)
 
@@ -191,15 +257,29 @@ def build_system_message(store: Store, project_slugs: list[str] | None = None) -
 
     # ── Global Memory ──
     if global_dir.is_dir():
-        for heading, content in _read_memory_dir(global_dir):
+        for heading, content, rel_path in _read_memory_dir(
+            global_dir, memory_dir
+        ):
+            full_path = f"memory/{rel_path}"
+            deleted = _get_deleted_sections(store, full_path)
+            if deleted:
+                content = _strip_deleted_from_content(content, deleted)
+            if not content.strip():
+                continue
             lines.append(f"## MIND 记忆 — {heading}")
             lines.append("")
             lines.append(content)
             lines.append("")
     else:
         # Backward compat: flat files at memory/ root
-        for heading, content in _read_memory_dir(memory_dir):
+        for heading, content, rel_path in _read_memory_dir(memory_dir):
             if ".example" in str(heading):
+                continue
+            full_path = f"memory/{rel_path}"
+            deleted = _get_deleted_sections(store, full_path)
+            if deleted:
+                content = _strip_deleted_from_content(content, deleted)
+            if not content.strip():
                 continue
             lines.append(f"## MIND 记忆 — {heading}")
             lines.append("")
@@ -211,15 +291,20 @@ def build_system_message(store: Store, project_slugs: list[str] | None = None) -
         project_id = _resolve_project_id(project_slugs[0])
         project_dir = memory_dir / "projects" / (project_id or "")
         if project_dir.is_dir():
-            entries = _read_memory_dir(project_dir)
+            entries = _read_memory_dir(project_dir, memory_dir)
             if entries:
                 reg = Registry.load()
                 label = reg.label_of(project_id) if project_id else project_id
                 lines.append(f"## MIND 记忆 — 项目: {label}")
                 lines.append("")
-                for _heading, content in entries:
-                    lines.append(content)
-                    lines.append("")
+                for _heading, content, rel_path in entries:
+                    full_path = f"memory/{rel_path}"
+                    deleted = _get_deleted_sections(store, full_path)
+                    if deleted:
+                        content = _strip_deleted_from_content(content, deleted)
+                    if content.strip():
+                        lines.append(content)
+                        lines.append("")
 
     # ── Brief (from DB, project-filtered) ──
     brief = build_brief_md(store, project_slugs=project_slugs)

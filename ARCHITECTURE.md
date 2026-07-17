@@ -92,6 +92,14 @@ Stop-hook `systemMessage` 不渲染的缺口——让总结进度看得见。
 - **不依赖 langchain**：直接 requests 调 DeepSeek，旧系统靠 langchain 是没跑起来的根因之一。
 - **双通道注入**：systemMessage（动态简报 + memory/ 文件）+ CLAUDE.md（静态铁律兜底）。
 - **全局记忆文件化**：铁律/偏好/技能从 DB `preferences` 表迁至 `memory/` 可编辑 markdown。两层 glob（global + projects/）自动注入，加文件不改代码。
+- **记忆生命周期管理**（v1.3.1）：自动化发现→提案→审核→淘汰闭环。
+  - `memory_registry` 表：每条记忆注册元数据（scope / base_weight / 确认次数 / 最后确认时间），按 `##` 章节粒度追踪。
+  - **艾宾浩斯衰减**：`w_effective = base_weight × e^(-days / (30 × base_weight))`，强记忆慢衰减、弱记忆快淘汰。权重只影响淘汰建议，不影响注入。
+  - `memory_proposals` 表：提案队列（create/update/delete/upgrade/downgrade），LLM 从日报自动生成 → 看板人工批复后才写入 `memory/` 文件。
+  - `propose_memories.py`：Stop hook 后台 detached 触发，扫描最近日报 → LLM 提取 ≥2 次出现的跨项目模式 → 写入 proposals 表。置信度 <0.6 自动过滤。
+  - 看板"记忆审核"面板：待批复提案卡片（批复/驳回/编辑）+ 记忆清单（scope 筛选、分组折叠、权重进度条、确认/删除操作）。
+  - **删除流程**：批复 delete 提案 → 从 `memory/` markdown 文件移除被删章节（`_remove_section`）+ registry 标记 deleted + `inject.py` 查 registry 做兜底过滤。
+  - `weight_log` 表记录每次 base_weight 变化，`/api/memory-registry/<id>/history` 端点预留折线图接口。
 - **LLM 错误分流**：致命（余额/认证/权限 401/402/403）抛 `LLMFatalError` 立即中止整批，
   瞬时（断网/超时/5xx）退避重试；`summarize.py` 批处理加连续失败熔断。全程幂等、断点续，杜绝空转。
 

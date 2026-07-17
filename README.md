@@ -108,6 +108,16 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.3.1 — 记忆生命周期管理 + 看板审核面板 + 删除流程修复
+
+- **记忆自动提案**：`propose_memories.py` 从日报扫描可复用知识，LLM 三步分析（Scan→Compare→Propose），≥2 次出现的跨项目模式才生成提案，写入 `memory_proposals` 表待人工批复
+- **艾宾浩斯权重模型**：`memory_registry` 表追踪每条记忆，`w_effective = base_weight × e^(-days / (30 × base_weight))`，强记忆慢衰减；权重只用于淘汰建议，不影响注入
+- **看板记忆审核面板**：待批复提案卡片（批复/驳回/编辑）+ 记忆清单（scope 筛选、分组折叠、权重进度条、确认/删除）；确认上限 1.0 防重复刷权重
+- **衰减淘汰**：w<0.15 自动提案删除 → 人工批复后才执行，**无静默删除**
+- **删除流程修复**：批复 delete 提案后从 `memory/` 文件真实移除被删章节 + `inject.py` registry 兜底校验
+- **精度统一**：`effective_weight` 后端 4 位、前端显示 3 位小数
+- **新增表**：`memory_registry`、`memory_proposals`、`weight_log`；新增脚本：`memory_registry.py`、`propose_memories.py`
+
 ### v1.3.0 — 全局记忆文件化 + 项目隔离注入
 
 - DB `preferences` 表迁至可编辑 `memory/global/*.md`（用户铁律/技能/偏好）

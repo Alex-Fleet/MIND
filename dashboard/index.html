@@ -9,6 +9,7 @@
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
     --text:#e6edf3; --muted:#8b949e;
     --turn:#4493f8; --daily:#3fb950; --monthly:#bc8cff; --warn:#d29922;
+    --red:#f85149; --green:#3fb950; --yellow:#d29922;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);
@@ -24,6 +25,10 @@
        padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;user-select:none}
   .btn:hover{background:var(--panel2)}
   .btn.on{background:#1f6feb22;border-color:#1f6feb;color:#79c0ff}
+  .btn.danger{background:#f8514922;border-color:var(--red);color:var(--red)}
+  .btn.danger:hover{background:#f8514933}
+  .btn.success{background:#3fb95022;border-color:var(--green);color:var(--green)}
+  .btn.success:hover{background:#3fb95033}
   .stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
   .stat{background:var(--panel);border:1px solid var(--border);border-radius:8px;
         padding:8px 14px;min-width:76px}
@@ -45,7 +50,7 @@
   .b-daily{background:#3fb95022;color:var(--daily)}
   .b-monthly{background:#bc8cff22;color:var(--monthly)}
   .tag-merged{font-size:10px;color:var(--muted);border:1px solid var(--border);padding:1px 6px;border-radius:5px;white-space:nowrap}
-	  .tag-noise{font-size:10px;color:var(--warn);border:1px solid var(--warn);
+  .tag-noise{font-size:10px;color:var(--warn);border:1px solid var(--warn);
              padding:1px 6px;border-radius:5px;white-space:nowrap}
   .proj{font-size:11px;color:var(--muted);background:#ffffff0a;padding:2px 8px;border-radius:6px;
         white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
@@ -56,33 +61,79 @@
        border-radius:5px;margin:0 0 8px;color:#c9d1d9;white-space:pre-wrap}
   .empty{color:var(--muted);text-align:center;padding:40px}
   .meta{margin-top:10px;color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+  /* ── Memory Review ── */
+  .section-title{font-size:16px;font-weight:600;margin:20px 0 10px;padding-bottom:8px;
+                  border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .proposal-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+                 padding:14px 16px;margin-bottom:10px}
+  .proposal-card.conflict{border-color:var(--red)}
+  .proposal-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .proposal-title{font-weight:600;flex:1}
+  .proposal-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .action-tag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px}
+  .a-create{background:#3fb95022;color:var(--green)}
+  .a-update{background:#4493f822;color:var(--turn)}
+  .a-delete{background:#f8514922;color:var(--red)}
+  .a-upgrade{background:#bc8cff22;color:var(--monthly)}
+  .a-downgrade{background:#d2992222;color:var(--yellow)}
+  .scope-tag{font-size:11px;background:#ffffff0a;padding:2px 8px;border-radius:6px;color:var(--muted)}
+  .conflict-alert{background:#f8514910;border:1px solid var(--red);border-radius:6px;
+                    padding:6px 10px;margin:6px 0;font-size:12px;color:var(--red)}
+  .proposal-body{margin:8px 0;padding:8px 12px;background:var(--bg);border-radius:6px;
+                  font-size:13px;white-space:pre-wrap;max-height:200px;overflow-y:auto}
+  .proposal-actions{display:flex;gap:6px;margin-top:8px}
+  .edit-area{width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);
+              color:var(--text);font:13px/1.5 monospace;padding:10px;border-radius:6px;
+              resize:vertical;margin:8px 0}
+  .registry-item{background:var(--panel);border:1px solid var(--border);border-radius:8px;
+                 padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  .registry-item.warning{border-color:var(--yellow)}
+  .registry-item.critical{border-color:var(--red)}
+  .weight-bar{width:80px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;flex-shrink:0}
+  .weight-fill{height:100%;border-radius:3px;transition:width .3s}
+  .weight-healthy{background:var(--green)}
+  .weight-warning{background:var(--yellow)}
+  .weight-critical{background:var(--red)}
+  .weight-num{font-size:12px;font-weight:600;min-width:40px;text-align:right}
+  .reg-info{flex:1;overflow:hidden}
+  .reg-path{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .reg-days{font-size:11px;color:var(--muted);white-space:nowrap}
+  .scope-header:hover{color:var(--text)!important}
+  .scope-header .arrow{display:inline-block;transition:transform .2s;font-size:12px}
+  .scope-header .arrow.open{transform:rotate(90deg)}
 </style>
 </head>
 <body>
 <header>
   <div class="top">
-    <div class="title"><span class="dot"></span>MIND · 记忆看板</div>
+    <div class="title"><span class="dot" id="modeDot"></span><span id="modeTitle">MIND · 记忆看板</span></div>
     <div class="spacer"></div>
     <span class="refresh" id="refresh">加载中…</span>
+    <span class="btn" id="memoryBtn" onclick="toggleMode()">🧠 记忆审核</span>
     <a class="btn" href="/projects" style="text-decoration:none">🗂 项目管理</a>
     <span class="btn" id="noiseBtn" onclick="toggleNoise()"></span>
-    <span class="btn" onclick="load()">⟳ 手动刷新</span>
+    <span class="btn" onclick="doLoad()">⟳ 手动刷新</span>
   </div>
   <div class="stats" id="stats"></div>
   <div class="chips" id="typeChips"></div>
   <div class="chips" id="projChips"></div>
+  <div class="chips" id="scopeChips" style="display:none"></div>
 </header>
 <main><div id="list"></div></main>
 
 <script>
-const S = { data:null, proj:"all", type:"all", ptype:"all", open:new Set(), hideNoise:true };
+const S = {
+  data:null, proj:"all", type:"all", ptype:"all", open:new Set(),
+  hideNoise:true, mode:"timeline", // "timeline" | "memory"
+  proposals:null, registry:null,
+  memScope:"all", // "all" | "global" | "project:<id>"
+  memExpanded:new Set() // expanded scope groups
+};
 
-// 无效记录：优先读后端 validity 字段，NULL 时回退前端正则（兼容 legacy 数据）
 const NOISE=/(用户中断|中断，无|无实际内容|无内容|空操作|空.?会话|空对话|compact|\/compact|对话压缩|会话压缩|记忆压缩|上下文压缩|内容压缩|历史压缩|压缩命令|压缩指令|压缩操作|压缩标记|压缩日志|压缩记录|压缩请求|压缩完成|压缩触发|压缩执行|纯粹回顾)/i;
 const isNoise=it=>{
   if(it.validity==="invalid") return true;
   if(it.validity==="valid"||it.validity==="low_value"||it.validity==="merged") return false;
-  // legacy: validity NULL → 正则回退
   return NOISE.test(it.title||"")||NOISE.test((it.body||"").slice(0,40));
 };
 const isMerged=it=>it.validity==="merged";
@@ -94,8 +145,10 @@ function fmt(iso){
   return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 const TYPES={turn:"turn",daily:"日报",monthly:"月报"};
+const ACTION_LABELS={create:"新建",update:"更新",delete:"删除",upgrade:"升级为全局",downgrade:"降级为项目"};
 
-async function load(){
+async function doLoad(){
+  if(S.mode==="memory"){ await loadMemory(); return; }
   document.getElementById("refresh").textContent="刷新中…";
   try{
     const r=await fetch("/api/feed",{cache:"no-store"});
@@ -106,6 +159,39 @@ async function load(){
     document.getElementById("refresh").textContent="⚠ 连不上服务器";
   }
 }
+
+async function loadMemory(){
+  document.getElementById("refresh").textContent="刷新中…";
+  try{
+    const [pr,rr]=await Promise.all([
+      fetch("/api/memory-proposals?status=pending",{cache:"no-store"}),
+      fetch("/api/memory-registry",{cache:"no-store"})
+    ]);
+    S.proposals=await pr.json();
+    S.registry=await rr.json();
+    renderMemory();
+    document.getElementById("refresh").textContent="更新于 "+fmt(new Date().toISOString());
+  }catch(e){
+    document.getElementById("refresh").textContent="⚠ 连不上服务器";
+  }
+}
+
+window.toggleMode=function(){
+  S.mode=S.mode==="timeline"?"memory":"timeline";
+  document.getElementById("memoryBtn").className=
+    "btn"+(S.mode==="memory"?" on":"");
+  document.getElementById("modeTitle").textContent=
+    S.mode==="memory"?"MIND · 记忆审核":"MIND · 记忆看板";
+  document.getElementById("typeChips").style.display=
+    S.mode==="memory"?"none":"";
+  document.getElementById("projChips").style.display=
+    S.mode==="memory"?"none":"";
+  document.getElementById("scopeChips").style.display=
+    S.mode==="memory"?"":"none";
+  document.getElementById("noiseBtn").style.display=
+    S.mode==="memory"?"none":"";
+  if(S.mode==="memory") loadMemory(); else render();
+};
 
 function render(){
   if(!S.data) return;
@@ -153,6 +239,230 @@ function render(){
       </div>${open?`<div class="body">${it.user_input?`<div class="uin"><b>👤 用户</b>　${esc(it.user_input)}</div>`:""}${it.type==="turn"?"<b>📝 摘要</b>　":""}${esc(it.body||"")}${it.summarized_at?`<div class="meta">🕒 对话 ${fmt(it.ts)}　·　总结于 ${fmt(it.summarized_at)}</div>`:""}</div>`:""}</div>`;
   }).join("");
 }
+
+// ── Memory Review Rendering ──
+
+// Build set of registry IDs that have pending proposals associated
+function _propRegIds(proposals, registry){
+  const ids=new Set();
+  if(!proposals||!registry) return ids;
+  const byKey=new Map(); // "file_path|section_heading" → registry id
+  for(const s in registry) for(const e of registry[s]){
+    byKey.set((e.file_path||"")+"|"+(e.section_heading||""), e.id);
+  }
+  for(const p of proposals){
+    // Direct related_registry_ids
+    const rel=p.related_registry_ids;
+    if(Array.isArray(rel)) rel.forEach(id=>ids.add(id));
+    // Also match delete proposals by path+section
+    if(p.action==="delete"&&p.target_path){
+      const key=(p.target_path||"")+"|"+(p.target_section||"");
+      const rid=byKey.get(key);
+      if(rid!==undefined) ids.add(rid);
+    }
+  }
+  return ids;
+}
+
+function renderMemory(){
+  const list=document.getElementById("list");
+  const proposals=S.proposals?.proposals||[];
+  const pendCount=S.proposals?.pending_count||0;
+  const registry=S.registry?.by_scope||{};
+
+  // Stats
+  let totalReg=0; for(const s in registry) totalReg+=registry[s].length;
+  document.getElementById("stats").innerHTML=
+    `<div class="stat"><div class="n">${pendCount}</div><div class="l">待批复提案</div></div>`+
+    `<div class="stat"><div class="n">${totalReg}</div><div class="l">记忆条目</div></div>`+
+    `<div class="stat"><div class="n">${Object.keys(registry).length}</div><div class="l">范围</div></div>`;
+
+  // Build proposal→registry mapping for conditional action buttons
+  const propRegIds=_propRegIds(proposals, registry);
+
+  // Collect all scopes for filter chips
+  const allScopes=Object.keys(registry).sort();
+  const scopeLabels={global:"🌐 用户全局"};
+  for(const s of allScopes){
+    if(!scopeLabels[s]) scopeLabels[s]="📁 "+esc(s);
+  }
+
+  // Build scope filter chips
+  let scopeChips=[`<span class="chip ${S.memScope==="all"?"on":""}" onclick="setMemScope('all')">全部</span>`];
+  for(const s of allScopes){
+    scopeChips.push(`<span class="chip ${S.memScope===s?"on":""}" onclick="setMemScope('${esc(s)}')">${scopeLabels[s]}</span>`);
+  }
+  document.getElementById("scopeChips").innerHTML=scopeChips.join("");
+  document.getElementById("scopeChips").style.display="";
+
+  let html="";
+
+  // ── Pending Proposals (always show all, regardless of scope filter) ──
+  html+=`<div class="section-title">📋 待批复提案 <span style="font-size:12px;color:var(--muted)">(${pendCount})</span></div>`;
+  if(!proposals.length){
+    html+=`<div class="empty">暂无待批复提案 🎉</div>`;
+  } else {
+    for(const p of proposals){
+      const conflicts=Array.isArray(p.conflicts)?p.conflicts:[];
+      html+=`<div class="proposal-card ${conflicts.length?'conflict':''}" id="prop-${p.id}">
+        <div class="proposal-header">
+          <span class="action-tag a-${p.action}">${ACTION_LABELS[p.action]||p.action}</span>
+          <span class="scope-tag">${esc(p.scope)}</span>
+          <span class="proposal-title">${esc(p.title)}</span>
+          <span style="font-size:11px;color:var(--muted)">${fmt(p.created_at)}</span>
+        </div>
+        <div class="proposal-meta">
+          ${p.target_path?`<span style="font-size:11px;color:var(--muted)">📁 ${esc(p.target_path)}</span>`:''}
+          ${p.target_section?`<span style="font-size:11px;color:var(--muted)">📍 ${esc(p.target_section)}</span>`:''}
+        </div>`;
+      if(p.reason) html+=`<div style="font-size:12px;color:var(--muted);margin-bottom:6px">💡 ${esc(p.reason)}</div>`;
+      if(conflicts.length){
+        for(const c of conflicts){
+          html+=`<div class="conflict-alert">⚠ 冲突: ${esc(c.summary||'')} (registry #${c.registry_id})</div>`;
+        }
+      }
+      html+=`<div class="proposal-body">${esc(p.content||'').slice(0,800)}${(p.content||'').length>800?'…':''}</div>
+        <div class="proposal-actions">
+          <span class="btn success" onclick="approveProposal(${p.id})">✅ 批复</span>
+          <span class="btn danger" onclick="rejectProposal(${p.id})">❌ 驳回</span>
+          <span class="btn" onclick="editProposal(${p.id})">✏️ 编辑</span>
+        </div>
+        <div id="edit-area-${p.id}" style="display:none">
+          <textarea class="edit-area" id="edit-text-${p.id}">${esc(p.content||'')}</textarea>
+          <span class="btn success" onclick="approveEdited(${p.id})">✅ 批复修改后内容</span>
+        </div>
+      </div>`;
+    }
+  }
+
+  // ── Registry (grouped by scope, collapsible, filtered) ──
+  html+=`<div class="section-title">📚 记忆清单 <span style="font-size:12px;color:var(--muted)">(${totalReg} 条)</span></div>`;
+
+  for(const scope of allScopes){
+    // Apply scope filter
+    if(S.memScope!=="all"&&S.memScope!==scope) continue;
+
+    const items=registry[scope];
+    if(!items||!items.length) continue;
+
+    const label=scopeLabels[scope]||scope;
+    const avgW=(items.reduce((s,i)=>s+(i.effective_weight||0),0)/items.length).toFixed(3);
+    const expanded=S.memExpanded.has(scope);
+    const scopeId="scope-"+scope.replace(/[^a-zA-Z0-9]/g,"_");
+
+    html+=`<div class="scope-group" style="margin-bottom:8px">
+      <div class="scope-header" onclick="toggleScope('${esc(scope)}')"
+           style="font-weight:600;padding:8px 0;color:var(--muted);cursor:pointer;user-select:none;
+                  display:flex;align-items:center;gap:6px">
+        <span style="font-size:12px;transition:transform .2s;display:inline-block;
+                     ${expanded?'transform:rotate(90deg)':''}">▶</span>
+        ${label}
+        <span style="font-size:11px;font-weight:400">· ${items.length} 条 · 均权 ${avgW}</span>
+      </div>
+      <div class="scope-body" style="${expanded?'':'display:none'}">`;
+
+    for(const e of items){
+      const w=e.effective_weight||0;
+      const ws=e.weight_status||"healthy";
+      const wPct=Math.min(100, Math.round(w*100));
+      const wCls=ws==="healthy"?"weight-healthy":ws==="warning"?"weight-warning":"weight-critical";
+      const hdr=e.section_heading||e.file_path.split("/").pop()||"(整文件)";
+      const hasProp=propRegIds.has(e.id);
+      const atCap=(e.base_weight||0)>=1.0;
+
+      // Confirm button: show only when proposal-associated
+      let actionBtns="";
+      if(hasProp){
+        if(atCap){
+          actionBtns=`<span class="btn" style="font-size:11px;padding:3px 8px;opacity:.4;cursor:default"
+                          title="已达上限 (bw=${e.base_weight?.toFixed(2)})">🔒</span>`;
+        } else {
+          const newBw=Math.min(1.0, (e.base_weight||0)+0.20).toFixed(2);
+          actionBtns=`<span class="btn success" style="font-size:11px;padding:3px 8px"
+                          onclick="confirmRegistry(${e.id})"
+                          title="保留记忆：${e.base_weight?.toFixed(2)} → ${newBw}（上限 1.00）">✅</span>`;
+        }
+        actionBtns+=` <span class="btn danger" style="font-size:11px;padding:3px 8px"
+                        onclick="deleteRegistry(${e.id},'${esc(e.file_path)}','${esc(e.section_heading||'')}')"
+                        title="标记删除">🗑</span>`;
+      }
+
+      html+=`<div class="registry-item ${ws}">
+        <div class="weight-bar"><div class="weight-fill ${wCls}" style="width:${wPct}%"></div></div>
+        <span class="weight-num" style="color:var(--${ws==='healthy'?'green':ws==='warning'?'yellow':'red'})">${w.toFixed(3)}</span>
+        <div class="reg-info">
+          <span>${esc(hdr)}</span>
+          <div class="reg-path">${esc(e.file_path)} · bw=${(e.base_weight||0).toFixed(3)} · 确认x${e.confirmed_count||0}</div>
+        </div>
+        <span class="reg-days">${e.days_since_confirmed}天</span>
+        ${actionBtns}
+      </div>`;
+    }
+
+    html+=`</div></div>`;
+  }
+
+  list.innerHTML=html;
+}
+
+// ── Actions ──
+
+window.setMemScope=function(s){
+  S.memScope=s; renderMemory();
+};
+
+window.toggleScope=function(scope){
+  S.memExpanded.has(scope)?S.memExpanded.delete(scope):S.memExpanded.add(scope);
+  renderMemory();
+};
+
+async function approveProposal(id){
+  await fetch("/api/memory-proposals",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({id,action:"approve"})
+  });
+  loadMemory();
+}
+
+async function rejectProposal(id){
+  await fetch("/api/memory-proposals",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({id,action:"reject"})
+  });
+  loadMemory();
+}
+
+window.editProposal=function(id){
+  const area=document.getElementById("edit-area-"+id);
+  area.style.display=area.style.display==="none"?"block":"none";
+};
+
+async function approveEdited(id){
+  const text=document.getElementById("edit-text-"+id).value;
+  await fetch("/api/memory-proposals",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({id,action:"approve",edited_content:text})
+  });
+  loadMemory();
+}
+
+async function confirmRegistry(id){
+  await fetch("/api/memory-registry/"+id+"/confirm",{method:"POST"});
+  loadMemory();
+}
+
+async function deleteRegistry(id,path,section){
+  await fetch("/api/memory-proposals",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({id:0, action:"create_delete_manual",
+      target_path:path, target_section:section||null,
+      title:"手动标记删除: "+path,
+      content:"用户从看板手动标记删除。",
+      reason:"手动标记"})
+  });
+  loadMemory();
+}
+
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
 window.toggle=k=>{S.open.has(k)?S.open.delete(k):S.open.add(k);render();};
 window.setProj=p=>{S.proj=p;render();};
@@ -160,8 +470,8 @@ window.setPtype=t=>{S.ptype=t;render();};
 window.setType=t=>{S.type=t;render();};
 window.toggleNoise=()=>{S.hideNoise=!S.hideNoise;render();};
 
-load();
-setInterval(load,12000);
+doLoad();
+setInterval(doLoad,12000);
 </script>
 </body>
 </html>
