@@ -108,6 +108,13 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.3.2 — 有效性分类修复：中断内容保留 + compact 漏网 + 子代理合并
+
+- **用户中断不再丢内容**：`_classify_noise` 检测到 `[Request interrupted by user]` 后提取标记后的真实用户输入（≥8 字符），放行给 L2 摘要，不再整体标 invalid
+- **compact 摘要不再漏网**：`_is_system_noise` 新增 "This session is being continued..." 和 "Primary Request and Intent:" 两种 compact 格式匹配
+- **子代理反馈后内容不丢失**：`build_turn_pairs` 中系统噪音 turn 直接跳过（不生成 pair），后续延续型输入合并到前一个真实 pair，而非被噪音对吞噬
+- **merged turn 看板说明**：前端 merged turn 标题显示"(已合并到上一轮)"，展开后显示合并原因说明
+
 ### v1.3.1 — 记忆生命周期管理 + 看板审核面板 + 删除流程修复
 
 - **记忆自动提案**：`propose_memories.py` 从日报扫描可复用知识，LLM 三步分析（Scan→Compare→Propose），≥2 次出现的跨项目模式才生成提案，写入 `memory_proposals` 表待人工批复

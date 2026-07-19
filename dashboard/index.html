@@ -235,8 +235,8 @@ function render(){
           ${noise?'<span class="tag-noise">无效</span>':""}
         <span class="proj" title="${it.project}">${it.project_name}</span>
         ${merged?'<span class="tag-merged">已合并</span>':""}
-        <span class="ttl">${esc(it.title)}</span>
-      </div>${open?`<div class="body">${it.user_input?`<div class="uin"><b>👤 用户</b>　${esc(it.user_input)}</div>`:""}${it.type==="turn"?"<b>📝 摘要</b>　":""}${esc(it.body||"")}${it.summarized_at?`<div class="meta">🕒 对话 ${fmt(it.ts)}　·　总结于 ${fmt(it.summarized_at)}</div>`:""}</div>`:""}</div>`;
+        <span class="ttl">${esc(merged?'(已合并到上一轮)':it.title)}</span>
+      </div>${open?`<div class="body">${it.user_input?`<div class="uin"><b>👤 用户</b>　${esc(it.user_input)}</div>`:""}${merged?'<div style="color:var(--muted);font-style:italic">此轮为延续型输入（如"继续""好了吗"）或系统消息，已合并到上一轮对话。</div>':(it.type==="turn"?"<b>📝 摘要</b>　":"")+esc(it.body||"")}${it.summarized_at?`<div class="meta">🕒 对话 ${fmt(it.ts)}　·　总结于 ${fmt(it.summarized_at)}</div>`:""}</div>`:""}</div>`;
   }).join("");
 }
 

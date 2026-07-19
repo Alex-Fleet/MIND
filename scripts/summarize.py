@@ -67,21 +67,38 @@ _NOISE_PATTERNS = [
     (re.compile(r'<command-message', re.IGNORECASE), 'slash-command'),
     # 用户中断 — 取消工具调用，无实质交互
     (re.compile(r'\[Request interrupted by user'), 'user-interrupt'),
-    # 纯 compact 注入 — Claude Code 9-section 英文摘要
-    (re.compile(r'Primary Request and Intent[\s\S]{100,}'
-                r'(?:Files and Code Sections|Key Technical Concepts)',
+    # 纯 compact 注入 — Claude Code 上下文续写摘要（新/旧两种格式）
+    (re.compile(r'(?:This session is being continued from a '
+                r'previous conversation|'
+                r'Primary Request and Intent[\s\S]{50,}'
+                r'(?:Files and Code Sections|Key Technical Concepts))',
                 re.IGNORECASE), 'compact-injection'),
 ]
 
 
 def _classify_noise(turn_pair: dict) -> str | None:
     """Layer 1 确定性过滤: 返回 'invalid' 或 None（放行给 Layer 2）。
-    只匹配 100% 确定的噪音——宁可漏过，绝不误杀。"""
+    只匹配 100% 确定的噪音——宁可漏过，绝不误杀。
+
+    特殊处理：如果噪音标记后有实际用户内容，提取真实内容并放行。
+    例如 "[Request interrupted by user]\\n这个图为什么重叠？" → 保留后半。"""
     content = turn_pair.get("conversation", "")
-    # 只检查 user 部分（分隔符前的内容）
     user_part = content.split("🤖 Claude:")[0] if "🤖 Claude:" in content else content
+
     for pattern, _label in _NOISE_PATTERNS:
-        if pattern.search(user_part):
+        m = pattern.search(user_part)
+        if m:
+            # 检查噪音标记后是否有实际用户内容
+            after = user_part[m.end():].strip()
+            # 去掉开头的 </xxx> 闭合标签残留 + 去掉行尾残留（如 "for tool use]"）
+            import re as _re
+            after = _re.sub(r'^</?[^>]+>', '', after).strip()
+            after = _re.sub(r'^[^\n]*?\]\s*', '', after).strip()
+            after = _re.sub(r'^\S+?\s', '', after, count=1).strip()  # 去掉 "for tool use]" 等残留词
+            if after and len(after) >= 8:
+                # 有实质内容——提取真实部分，替换 conversation
+                turn_pair["conversation"] = after
+                return None  # 放行给 L2
             return "invalid"
     return None
 
@@ -113,10 +130,30 @@ def _is_continuation(content: str) -> bool:
     return False
 
 
+_SYSTEM_NOISE_RE = re.compile(
+    r'<(?:task-notification|system-reminder|local-command-caveat|'
+    r'local-command-stdout|command-name|command-message)'
+    r'|\[Request interrupted by user'
+    r'|This session is being continued from a previous conversation'
+    r'|Primary Request and Intent:',
+    re.IGNORECASE
+)
+
+
+def _is_system_noise(content: str) -> bool:
+    """快速检测是否为系统消息（非用户输入）。用于 build_turn_pairs
+    中跳过噪音 turn，避免延续型内容被合并进噪音对。"""
+    first_line = content.strip().split("\n")[0][:200]
+    return bool(_SYSTEM_NOISE_RE.search(first_line))
+
+
 def build_turn_pairs(turns: list[dict], summarized_keys: set) -> tuple[list[dict], set]:
     """把 turns 配成 user-assistant 对，严格按 session 边界。
 
     延续型 turn（"好了吗""继续"等）自动拼入上一个 pair，不单独成对。
+    系统噪音 turn（task-notification/compact/中断等）跳过——不生成 pair，
+    但后续延续型 turn 会合并到上一个真实 pair。
+
     返回 (pairs, merged_keys) —— merged_keys 需被标记为已处理。
 
     每个 pair = 一条 user 消息 + 其后（同一 session、下一个 user 之前）的所有
@@ -155,6 +192,11 @@ def build_turn_pairs(turns: list[dict], summarized_keys: set) -> tuple[list[dict
             commit()                      # 会话切换 → 结束上一个 pair，不跨会话
             cur_session = t["session_id"]
         if t["role"] == "user":
+            # 系统噪音 → 跳过，不生成 pair，但标记为已处理
+            if _is_system_noise(t["content"]):
+                merged_keys.add((t["session_id"], t["seq"]))
+                continue
+
             if cur_user is not None and _is_continuation(t["content"]):
                 # 延续型 turn → 拼入当前 pair，不提交
                 merged_keys.add((t["session_id"], t["seq"]))
