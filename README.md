@@ -44,6 +44,7 @@ Memory Plugin/                 # 项目根（可放任意位置）
 ## 安装
 
 ### 前置要求
+
 - **Python 3.9+**（系统自带或 `brew install python3`）
 - **Claude Code**（VS Code 扩展或 CLI）
 - **LLM API 凭证**（DeepSeek 或 Anthropic，用于摘要生成）
@@ -107,6 +108,13 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 摘要是 Stop hook 每轮的活，积压靠后台补漏。
 
 ## Changelog
+
+### v1.3.3 — 系统噪音与延续型分流
+
+- **噪音/延续分流**：`build_turn_pairs` 返回值从 `(pairs, merged_keys)` 拆为 `(pairs, merged_keys, noise_keys)`
+- **系统噪音独立标记**：compact 注入、`<local-command-stdout>` 等系统消息走 `validity="invalid"`、`title="[噪音]"`，不再混入 merged
+- **中断内容智能保留**：`[Request interrupted by user]` 从 `_SYSTEM_NOISE_RE` 移除，交给 `_classify_noise()` 提取后续真实内容（≥8 字符放行）
+- **前端 merged 说明修正**：删除"或系统消息"误导文字
 
 ### v1.3.2 — 有效性分类修复：中断内容保留 + compact 漏网 + 子代理合并
 

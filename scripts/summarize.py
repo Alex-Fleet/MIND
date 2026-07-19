@@ -133,11 +133,12 @@ def _is_continuation(content: str) -> bool:
 _SYSTEM_NOISE_RE = re.compile(
     r'<(?:task-notification|system-reminder|local-command-caveat|'
     r'local-command-stdout|command-name|command-message)'
-    r'|\[Request interrupted by user'
     r'|This session is being continued from a previous conversation'
     r'|Primary Request and Intent:',
     re.IGNORECASE
 )
+# 注意：[Request interrupted by user] 不在此——它可能后面跟真实用户内容，
+# 由 _classify_noise() 做内容提取+放行判断，不在此处一刀切跳过。
 
 
 def _is_system_noise(content: str) -> bool:
@@ -147,34 +148,35 @@ def _is_system_noise(content: str) -> bool:
     return bool(_SYSTEM_NOISE_RE.search(first_line))
 
 
-def build_turn_pairs(turns: list[dict], summarized_keys: set) -> tuple[list[dict], set]:
+def build_turn_pairs(turns: list[dict], summarized_keys: set) -> tuple[list[dict], set, set]:
     """把 turns 配成 user-assistant 对，严格按 session 边界。
 
     延续型 turn（"好了吗""继续"等）自动拼入上一个 pair，不单独成对。
-    系统噪音 turn（task-notification/compact/中断等）跳过——不生成 pair，
+    系统噪音 turn（task-notification/compact 等）跳过——不生成 pair，
     但后续延续型 turn 会合并到上一个真实 pair。
 
-    返回 (pairs, merged_keys) —— merged_keys 需被标记为已处理。
+    返回 (pairs, merged_keys, noise_keys):
+      - merged_keys: 延续型用户输入，标 validity="merged"
+      - noise_keys: 系统消息（compact 注入/命令输出等），标 validity="invalid"
 
     每个 pair = 一条 user 消息 + 其后（同一 session、下一个 user 之前）的所有
     assistant 消息。修两个 bug：
       - 认 session 边界：session 变了就结束当前 pair，绝不跨会话粘内容。
       - 用 (session_id, user.seq) 判已总结，只产出未总结的 pair。
-
-    Returns (pairs, merged_keys) where merged_keys is set of (session_id, seq)
-    for turns that were merged and should be marked as handled.
     """
     pairs = []
     cur_user = None
     parts: list[str] = []
     cur_session = None
-    merged_keys: set = set()  # 被合并的 (session_id, seq)
+    merged_keys: set = set()  # 延续型 (session_id, seq)
+    noise_keys: set = set()   # 系统噪音 (session_id, seq)
 
     def commit():
         nonlocal cur_user, parts
+        already = merged_keys | noise_keys
         if cur_user is not None and \
                 (cur_user["session_id"], cur_user["seq"]) not in summarized_keys and \
-                (cur_user["session_id"], cur_user["seq"]) not in merged_keys:
+                (cur_user["session_id"], cur_user["seq"]) not in already:
             conv = f"👤 用户:\n{cur_user['content']}\n\n"
             if parts:
                 conv += "🤖 Claude:\n" + "\n".join(parts)
@@ -192,9 +194,9 @@ def build_turn_pairs(turns: list[dict], summarized_keys: set) -> tuple[list[dict
             commit()                      # 会话切换 → 结束上一个 pair，不跨会话
             cur_session = t["session_id"]
         if t["role"] == "user":
-            # 系统噪音 → 跳过，不生成 pair，但标记为已处理
+            # 系统噪音 → 跳过，不生成 pair，标记为噪音（不是合并）
             if _is_system_noise(t["content"]):
-                merged_keys.add((t["session_id"], t["seq"]))
+                noise_keys.add((t["session_id"], t["seq"]))
                 continue
 
             if cur_user is not None and _is_continuation(t["content"]):
@@ -212,7 +214,7 @@ def build_turn_pairs(turns: list[dict], summarized_keys: set) -> tuple[list[dict
                 parts.append(c)
 
     commit()
-    return pairs, merged_keys
+    return pairs, merged_keys, noise_keys
 
 
 def summarize_turn(turn: dict, paths: dict, store: Store) -> str | None:
@@ -372,9 +374,9 @@ def main():
         return
 
     # Build turn pairs (session-aware, 只留未总结的)
-    pairs, merged_keys = build_turn_pairs(raw, summarized_keys)
+    pairs, merged_keys, noise_keys = build_turn_pairs(raw, summarized_keys)
 
-    # 标记被合并的延续型 turn，防止被重复拾取
+    # 标记延续型 turn（真正用户输入，只是没新信息）
     if merged_keys:
         turn_project = {(t["session_id"], t["seq"]): t["project"] for t in raw}
         for sid, seq in merged_keys:
@@ -388,14 +390,30 @@ def main():
             "merged_count": len(merged_keys),
         })
 
+    # 标记系统噪音（compact 注入/命令输出等——不是用户输入）
+    if noise_keys:
+        turn_project = {(t["session_id"], t["seq"]): t["project"] for t in raw}
+        for sid, seq in noise_keys:
+            proj = turn_project.get((sid, seq), "")
+            store.insert_turn_summary(
+                session_id=sid, turn_seq=seq, project=proj,
+                file_path="", title="[噪音]", summary="",
+                validity="invalid",
+            )
+        store.log("summarize-noise", detail={
+            "noise_count": len(noise_keys),
+        })
+
     if not pairs:
         out("  (所有对话已总结)")
-        if merged_keys:
-            out(f"  (合并 {len(merged_keys)} 个延续型 turn)")
+        total_skipped = len(merged_keys) + len(noise_keys)
+        if total_skipped:
+            out(f"  (合并 {len(merged_keys)} 个延续 + {len(noise_keys)} 个噪音)")
         _emit_json(0, 0, 0, [])
         return
     out(f"  未总结对话: {len(pairs)} 个"
-        + (f"（合并 {len(merged_keys)} 个延续型 turn）" if merged_keys else ""))
+        + (f"（合并 {len(merged_keys)} 延续 + {len(noise_keys)} 噪音）"
+           if merged_keys or noise_keys else ""))
 
     if limit:
         pairs = pairs[:limit]
