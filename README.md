@@ -109,6 +109,12 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.4.0 — 每轮铁律注入：UserPromptSubmit hook + 全局记忆扩充
+
+- **每轮铁律注入**：新增 `hooks/on_prompt.py`，通过 `UserPromptSubmit` hook 每次用户按回车注入 `iron-rules.md`（~6KB），compact 后同样生效，解决 system-reminder 被冲淡后规则丢失的根因
+- **全局记忆三项扩充**：`memory/global/iron-rules.md` 新增——调研/搜索优先（GitHub 不可达立即停下）、Git 分支策略（feature/重构开 branch，合并 main 用户主导）、用户违背记忆时停下确认
+- **注入链条梳理**：明确 Claude Code 原生层（CLAUDE.md/MEMORY.md 永久可见）与 MIND 注入层（system-reminder 瞬态）的边界，UserPromptSubmit 填补了每轮规则刷新缺口
+
 ### v1.3.3 — 系统噪音与延续型分流
 
 - **噪音/延续分流**：`build_turn_pairs` 返回值从 `(pairs, merged_keys)` 拆为 `(pairs, merged_keys, noise_keys)`
