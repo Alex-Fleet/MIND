@@ -109,6 +109,11 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.4.1 — 铁律扩充：拒绝 Demo 思维
+
+- **新增铁律"拒绝 Demo 思维"**：不接受"现在能用，遇到情况再说"。设计时考虑边界，实现时处理异常。用户要求 quick hack 时主动停下提示风险。
+- 同步更新 `CLAUDE.md`、`iron-rules.md`、`user-iron-rules.md` 三处。
+
 ### v1.4.0 — 每轮铁律注入：UserPromptSubmit hook + 全局记忆扩充
 
 - **每轮铁律注入**：新增 `hooks/on_prompt.py`，通过 `UserPromptSubmit` hook 每次用户按回车注入 `iron-rules.md`（~6KB），compact 后同样生效，解决 system-reminder 被冲淡后规则丢失的根因
