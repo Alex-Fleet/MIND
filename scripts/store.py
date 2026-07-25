@@ -387,7 +387,7 @@ class Store:
                 "JOIN turns t ON t.session_id = ts.session_id "
                              "AND t.seq = ts.turn_seq "
                              "AND t.role = 'user' "
-                "WHERE ts.project = ? AND date(t.timestamp) = ? "
+                "WHERE ts.project = ? AND date(t.timestamp, '+4 hours') = ? "
                 "ORDER BY t.timestamp",
                 (project, date_str)
             ).fetchall()
@@ -398,7 +398,7 @@ class Store:
                                     ) -> list[dict]:
         query = """
             SELECT * FROM daily_reports
-            WHERE date > date('now', ?)
+            WHERE date > date('now', '+4 hours', ?)
         """
         params = [f'-{days} days']
         if project:
@@ -448,7 +448,7 @@ class Store:
         but no daily report yet."""
         with sqlite3.connect(self.db_path) as conn:
             rows = conn.execute(
-                "SELECT DISTINCT date(t.timestamp) as d "
+                "SELECT DISTINCT date(t.timestamp, '+4 hours') as d "
                 "FROM turn_summaries ts "
                 "JOIN turns t ON t.session_id = ts.session_id "
                              "AND t.seq = ts.turn_seq "

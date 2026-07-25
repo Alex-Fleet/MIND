@@ -13,7 +13,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -262,7 +262,7 @@ def check_and_generate(store: Store, paths: dict,
             "SELECT DISTINCT project FROM turn_summaries"
         ).fetchall()]
 
-    today = date.today().isoformat()
+    today = (datetime.now() - timedelta(hours=4)).date().isoformat()
 
     for project in projects:
         # Check missing daily reports

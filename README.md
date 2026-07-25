@@ -109,6 +109,11 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.4.2 — 日报日切点改为北京时间 04:00
+
+- **日切偏移**：`date(t.timestamp)` → `date(t.timestamp, '+4 hours')`，日切点从 UTC 00:00 改为北京时间 04:00。凌晨 4 点前的对话归前一天，4 点后归当天。
+- 影响范围：`get_turn_summaries_for_date`、`get_daily_reports_in_window`、`get_missing_daily_dates`、`today` 判定。
+
 ### v1.4.1 — 铁律扩充：拒绝 Demo 思维
 
 - **新增铁律"拒绝 Demo 思维"**：不接受"现在能用，遇到情况再说"。设计时考虑边界，实现时处理异常。用户要求 quick hack 时主动停下提示风险。
