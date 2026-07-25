@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -445,6 +446,8 @@ def main():
         else:
             failed += 1
             consecutive_fail += 1
+            if consecutive_fail > 1:
+                time.sleep(2)  # 退避：给 API 恢复窗口
             if consecutive_fail >= MAX_CONSECUTIVE_FAIL:
                 aborted = f"连续 {consecutive_fail} 次失败(疑似网络/服务异常)"
                 out(f"\n  ✖ 已熔断:{aborted}")

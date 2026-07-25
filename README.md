@@ -109,6 +109,11 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.4.3 — DeepSeek API 瞬时异常容错加固
+
+- **call_llm 空响应重试**：HTTP 200 但 body 为空不再直接放弃，改为走重试循环（最多 3 次指数退避）。7/25 DeepSeek 抽风返回空 body 导致 11 对全失败—此改修复根因。
+- **summarize 失败退避**：连续失败 ≥2 次后 `sleep(2)`，给 API 恢复窗口，降低熔断概率。
+
 ### v1.4.2 — 日报日切点改为北京时间 04:00
 
 - **日切偏移**：`date(t.timestamp)` → `date(t.timestamp, '+4 hours')`，日切点从 UTC 00:00 改为北京时间 04:00。凌晨 4 点前的对话归前一天，4 点后归当天。

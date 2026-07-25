@@ -174,7 +174,11 @@ def call_llm(prompt: str, system: str = "",
                         text += block.get("text", "")
                 if text:
                     return robust_json_parse(text)
-                return None
+                # 空响应（DeepSeek 偶尔抽风）→ 视为瞬时异常，走重试
+                logger.warning(
+                    "LLM returned empty content (attempt %d/%d), retrying...",
+                    attempt + 1, max_retries
+                )
             if resp.status_code in FATAL_STATUS:
                 # 致命(余额/认证/权限)——重试无意义,直接抛出让整批中止
                 raise LLMFatalError(resp.status_code, resp.text[:200])
