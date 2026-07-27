@@ -24,6 +24,9 @@ memory/projects/**/*.md
 projects.json
 projects.draft.json
 
+# ── Node ──
+dashboard/node_modules/
+
 # ── Python ──
 __pycache__/
 *.pyc

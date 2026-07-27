@@ -71,7 +71,8 @@ memory/
 
 只读旁路，**不参与注入链路**：`dashboard_server.py`（Python 标准库 `ThreadingHTTPServer`，
 以 `mode=ro` 只读打开 DB，绑 `127.0.0.1`）提供 `/api/feed`（统一时间线 + 统计 + 项目列表），
-`dashboard/index.html` 暗色前端每 12s 轮询渲染。用途：补上 Claude Code 2.1.207
+前端为 TypeScript + React 19 + Vite 6 SPA（`dashboard/src/`，构建产物 `dashboard/dist/`），
+每 12s 轮询渲染。用途：补上 Claude Code 2.1.207
 Stop-hook `systemMessage` 不渲染的缺口——让总结进度看得见。
 - 时间线按**真实对话时间**（`turns.timestamp`）排序，而非"总结时刻"。
 - 无效记录（中断/空操作）自动标注，可一键隐藏；每条 turn 保留用户原话 + 摘要。

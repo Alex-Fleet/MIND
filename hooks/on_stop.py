@@ -65,9 +65,17 @@ def spawn_propose() -> None:
     与 spawn_background_catchup 同模式。
     只在有新增日报/月报时调用。"""
     try:
+        # 日志写 data/logs/propose.log，不在 DEVNULL 里静默
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "data", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_fp = open(os.path.join(log_dir, "propose.log"), "a")
+    except Exception:
+        log_fp = subprocess.DEVNULL
+    try:
         subprocess.Popen(
             [PYTHON, os.path.join(SCRIPTS, "propose_memories.py")],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=log_fp, stderr=subprocess.STDOUT,
             start_new_session=True,
         )
     except Exception as e:

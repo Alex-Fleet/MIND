@@ -86,6 +86,7 @@ def get_paths() -> dict:
         "injected_dir": DATA_DIR / "injected",
         "prefs_path": DATA_DIR / "injected" / "prefs.md",
         "brief_path": DATA_DIR / "injected" / "brief.md",
+        "logs_dir": DATA_DIR / "logs",
         "claude_md": BASE_DIR / "CLAUDE.md",
         "projects_dir": PROJECTS_DIR,
         "old_memory_db": OLD_MEMORY_DB,

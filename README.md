@@ -109,6 +109,13 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.4.4 — 看板 TS+React+Vite 重构 + 项目管理 UX 改进
+
+- **看板重构**：dashboard 从原生 JS 重写为 TypeScript + React 19 + Vite 6，三页面（时间线/记忆审核/项目管理）统一 SPA 导航
+- **时间线修复**：React reconciliation 导致筛选切换后列表不更新——加动态 key 强制 remount；API `build_feed()` 移除 LIMIT 1000（数据从 1084 → 5256 条恢复）
+- **项目管理改进**：未分配窗口与长期项目卡片 CSS columns 瀑布流叠放，默认收起为紧凑卡片，拖入 slug 自动展开；一次性/归档默认折叠
+- **后端修复**：`propose_memories` 日志不再丢 DEVNULL，输出到 `logs/propose.log`
+
 ### v1.4.3 — DeepSeek API 瞬时异常容错加固
 
 - **call_llm 空响应重试**：HTTP 200 但 body 为空不再直接放弃，改为走重试循环（最多 3 次指数退避）。7/25 DeepSeek 抽风返回空 body 导致 11 对全失败—此改修复根因。

@@ -55,6 +55,28 @@ def spawn_background_catchup() -> None:
         pass
 
 
+def spawn_propose_catchup() -> None:
+    """后台补漏记忆提案：每次会话启动检查距上次成功执行是否超过 24h，
+    超过则后台触发。propose_memories.py 内部用 operation_log 判重，
+    无新日报时自动跳过（不调 LLM）。"""
+    try:
+        log_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "data", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_fp = open(os.path.join(log_dir, "propose.log"), "a")
+    except Exception:
+        log_fp = subprocess.DEVNULL
+    try:
+        subprocess.Popen(
+            [PYTHON, os.path.join(SCRIPTS, "propose_memories.py")],
+            stdout=log_fp, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except Exception:
+        pass
+
+
 def _is_dashboard_running(port: int = DASHBOARD_PORT) -> bool:
     """检测 dashboard server 是否已在监听端口。
     不只检查端口，还验证响应内容——防止其他项目占端口导致误判。"""
@@ -133,6 +155,7 @@ def main():
 
     # 3. 后台补漏（不阻塞）
     spawn_background_catchup()
+    spawn_propose_catchup()
 
     # 输出注入内容（纯文本 stdout → 插件自动注入为上下文）
     if ok and out:

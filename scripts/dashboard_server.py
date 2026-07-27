@@ -27,8 +27,8 @@ from store import Store
 
 PATHS = get_paths()
 DB = str(PATHS["db_path"])
-HTML = BASE_DIR / "dashboard" / "index.html"
-PROJECTS_HTML = BASE_DIR / "dashboard" / "projects.html"
+DIST = BASE_DIR / "dashboard" / "dist"
+HTML = DIST / "index.html"
 LIVE_REGISTRY = BASE_DIR / "projects.json"
 DRAFT_REGISTRY = BASE_DIR / "projects.draft.json"
 TYPE_ORDER = ["long_term", "one_off", "archived"]
@@ -106,7 +106,7 @@ def build_feed():
         "(SELECT timestamp FROM turns t "
         " WHERE t.session_id=turn_summaries.session_id "
         " AND t.seq=turn_summaries.turn_seq AND t.role='user' LIMIT 1) AS real_ts "
-        "FROM turn_summaries ORDER BY real_ts IS NULL, real_ts DESC, summarized_at DESC LIMIT 1000"):
+        "FROM turn_summaries ORDER BY real_ts IS NULL, real_ts DESC, summarized_at DESC"):
         items.append({"type": "turn",
                       "ts": _norm_ts(r["real_ts"]) or _norm_ts(r["summarized_at"]),
                       "summarized_at": _norm_ts(r["summarized_at"]),
@@ -667,12 +667,25 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, json.dumps(
                     build_proposals(status), ensure_ascii=False
                 ), "application/json; charset=utf-8")
-            elif p in ("/", "/index.html"):
-                self._serve_html(HTML, "dashboard/index.html 不存在")
-            elif p in ("/projects", "/projects.html"):
-                self._serve_html(PROJECTS_HTML, "dashboard/projects.html 不存在")
+            elif p.startswith("/assets/"):
+                # Vite 构建产物：/assets/xxx → dist/assets/xxx
+                asset = DIST / p.lstrip("/")
+                if asset.exists():
+                    import mimetypes
+                    ct = mimetypes.guess_type(str(asset))[0] or "application/octet-stream"
+                    self._send(200, asset.read_bytes(), ct)
+                else:
+                    self._send(404, "asset not found", "text/plain; charset=utf-8")
+            elif p.startswith("/vite.svg"):
+                # Vite 默认 favicon fallback
+                svg = DIST / "vite.svg"
+                if svg.exists():
+                    self._send(200, svg.read_bytes(), "image/svg+xml")
+                else:
+                    self._send(404, "", "text/plain; charset=utf-8")
             else:
-                self._send(404, "not found", "text/plain; charset=utf-8")
+                # SPA fallback：所有非 API/非静态资源路径 → index.html（React Router 接管）
+                self._serve_html(HTML, "dashboard/dist/index.html 不存在")
         except Exception as e:
             self._send(500, json.dumps({"error": str(e)}), "application/json; charset=utf-8")
 
