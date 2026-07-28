@@ -43,42 +43,52 @@ Memory Plugin/                 # 项目根（可放任意位置）
 
 ## 安装
 
-### 前置要求
+### 你需要的
 
-- **Python 3.9+**（系统自带或 `brew install python3`）
-- **Claude Code**（VS Code 扩展或 CLI）
-- **LLM API 凭证**（DeepSeek 或 Anthropic，用于摘要生成）
+- **Python 3.9+** — mac 自带，或 `brew install python3`
+- **VS Code + Claude Code 扩展**
+- **DeepSeek API 密钥**（或 Anthropic）
 
-### 步骤
+### 三步装完
 
 ```bash
-# 1. 克隆项目
-git clone <你的仓库地址>
-cd Memory-Plugin
-
-# 2. 安装依赖（就一个 requests，其余全是标准库）
+# 1. 装依赖（就一个 requests，其它全是 Python 自带）
 pip3 install -r requirements.txt
 
-# 3. 配置 API 凭证
-#    编辑 ~/.claude/settings.json，在 env 段填入：
-#    "ANTHROPIC_AUTH_TOKEN": "sk-你自己的",
+# 2. 配 API 密钥
+#    打开 ~/.claude/settings.json，在 env 段填你的密钥：
+#    "ANTHROPIC_AUTH_TOKEN": "sk-xxxx",
 #    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic"
 
-# 4. 一键安装（自动创建 config.json + CLAUDE.md + 注册 hook）
+# 3. 一键安装
 python3 install.py
-
-# 5. 重启 Claude Code → 生效
-#    新会话启动时自动注入记忆，每次回复后自动摄入+摘要
 ```
+
+`install.py` 会自动：
+- 创建 `config.json`（从模板）
+- 创建 `CLAUDE.md`（铁律兜底）
+- 注册 3 个 hook（Stop / SessionStart / UserPromptSubmit）到 `~/.claude/settings.json`
+- 备份你的旧 settings.json
+
+装完**重启 Claude Code** 就生效。新会话启动时注入记忆，每次回复后自动记录。
 
 ### 验证
 
-重启 Claude Code 后，新会话的系统消息应包含 "MIND 记忆简报"。也可以启动看板确认：
+问 Claude："你知道日报吗？" 如果能看到最近工作动态，就成功了。
 
+也可以开看板：
 ```bash
 python3 scripts/dashboard_server.py
 # 打开 http://127.0.0.1:8765
 ```
+
+### 常见问题
+
+**"装完没反应"** → 确认重启了 Claude Code（关掉 VS Code 重开）。hook 要新会话才触发。
+
+**"日报是空的"** → 正常。记忆是慢慢积累的，用几轮后回来看看板。
+
+**"hook 报错"** → 检查 `data/logs/` 下的日志；确认 API 密钥有效。
 
 ## 手动命令
 
@@ -108,6 +118,12 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 摘要是 Stop hook 每轮的活，积压靠后台补漏。
 
 ## Changelog
+
+### v1.4.6 — install.py 跟上拆分 + 安装教程重写
+
+- **install.py 修复**：旧版只注册 2 个单条 hook，现在注册 Stop + SessionStart(9条拆分) + UserPromptSubmit，与最新 hook 配置一致
+- **安装教程重写**：三步傻瓜式（pip → 配密钥 → install.py → 重启），加常见问题解答
+- 新版 `_build_session_start_entry()` 自动生成含 8 条 `inject --section` 的完整 SessionStart 配置
 
 ### v1.4.5 — SessionStart hook 拆分：绕开 10KB 输出上限
 

@@ -49,16 +49,51 @@ def _copy_if_missing(src: str, dst: str, label: str) -> None:
         print(f"⚠ 模板 {src} 不存在，跳过 {label}")
 
 
-def hook_entry(script: str, timeout: int = 120) -> dict:
+def hook_entry(script: str, timeout: int = 120,
+               extra_hooks: list[dict] | None = None) -> dict:
+    """Build a hook entry. extra_hooks are command dicts appended after the main one."""
     cmd = f'python3 "{PROJECT / "hooks" / script}"'
+    main = {"command": cmd, "type": "command", "timeout": timeout}
+    hooks = [main] + (extra_hooks or [])
+    return {"hooks": hooks, "matcher": ""}
+
+
+def _cmd(script_name: str, *args, timeout: int = 15) -> dict:
+    """Build a single inject.py --section command."""
+    script_path = PROJECT / "scripts" / script_name
+    arg_str = " ".join(args)
     return {
-        "hooks": [{"command": cmd, "type": "command", "timeout": timeout}],
-        "matcher": "",
+        "command": f'python3 "{script_path}" {arg_str}'.strip(),
+        "type": "command",
+        "timeout": timeout,
     }
 
 
 def _is_nailong(entry: dict, script: str) -> bool:
     return any(script in h.get("command", "") for h in entry.get("hooks", []))
+
+
+# SessionStart 拆分：on_session_start.py + 8 条 inject --section 命令
+# 每条独立 10KB 预算，绕开 Claude Code persistHookOutput 硬限制
+SESSION_START_SECTIONS = [
+    ("global", "--file iron-rules.md"),
+    ("global", "--file agenting-skills.md"),
+    ("global", "--file coding-philosophy.md"),
+    ("global", "--file user-profile.md"),
+    ("project", ""),
+    ("turns", "--limit 28"),
+    ("dailies", "--limit 5"),
+    ("monthlies", ""),
+]
+
+
+def _build_session_start_entry() -> dict:
+    """构建完整的 SessionStart hook entry（on_session_start + 8 section 命令）。"""
+    extra = [
+        _cmd("inject.py", f"--section {sec} {args}".strip(), timeout=15)
+        for sec, args in SESSION_START_SECTIONS
+    ]
+    return hook_entry("on_session_start.py", timeout=120, extra_hooks=extra)
 
 
 def main():
@@ -93,11 +128,25 @@ def main():
 
     # 注册 hook：保留非MIND的条目，替换MIND自己的
     hooks = settings.setdefault("hooks", {})
-    for event, script in [("Stop", "on_stop.py"),
-                          ("SessionStart", "on_session_start.py")]:
-        kept = [e for e in hooks.get(event, []) if not _is_nailong(e, script)]
-        hooks[event] = kept + [hook_entry(script)]
-    print("✓ 已注册 Stop + SessionStart hook（保留了你其它的 hook）")
+
+    # Stop hook
+    kept_stop = [e for e in hooks.get("Stop", [])
+                 if not _is_nailong(e, "on_stop.py")]
+    hooks["Stop"] = kept_stop + [hook_entry("on_stop.py", timeout=120)]
+
+    # SessionStart hook（主入口 + 8 条 section 拆分命令）
+    kept_ss = [e for e in hooks.get("SessionStart", [])
+               if not _is_nailong(e, "on_session_start.py")]
+    hooks["SessionStart"] = kept_ss + [_build_session_start_entry()]
+
+    # UserPromptSubmit hook（每轮注入铁律）
+    kept_ups = [e for e in hooks.get("UserPromptSubmit", [])
+                if not _is_nailong(e, "on_prompt.py")]
+    hooks["UserPromptSubmit"] = kept_ups + [
+        hook_entry("on_prompt.py", timeout=10)]
+
+    print("✓ 已注册 Stop + SessionStart(9条) + UserPromptSubmit hook")
+    print("  （保留了你其它的 hook 条目）")
 
     SETTINGS.write_text(
         json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
