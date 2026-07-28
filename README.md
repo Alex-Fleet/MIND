@@ -49,18 +49,22 @@ Memory Plugin/                 # 项目根（可放任意位置）
 - **VS Code + Claude Code 扩展**
 - **DeepSeek API 密钥**（或 Anthropic）
 
-### 三步装完
+### 四步装完
 
 ```bash
-# 1. 装依赖（就一个 requests，其它全是 Python 自带）
+# 1. 拿到代码
+git clone https://github.com/Alex-Fleet/MIND.git
+cd MIND
+
+# 2. 装依赖（就一个 requests，其它全是 Python 自带）
 pip3 install -r requirements.txt
 
-# 2. 配 API 密钥
+# 3. 配 API 密钥
 #    打开 ~/.claude/settings.json，在 env 段填你的密钥：
 #    "ANTHROPIC_AUTH_TOKEN": "sk-xxxx",
 #    "ANTHROPIC_BASE_URL": "https://api.deepseek.com/anthropic"
 
-# 3. 一键安装
+# 4. 一键安装
 python3 install.py
 ```
 
