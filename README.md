@@ -109,6 +109,13 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.4.5 — SessionStart hook 拆分：绕开 10KB 输出上限
+
+- **hook 拆分**：SessionStart 从单条 48KB 命令拆为 9 条（on_session_start + 8 条 inject --section），每条独立 10KB 预算，合计 ~37KB 全部注入上下文，不再被截断
+- **inject.py --section**：新增 `--section`（global/project/turns/dailies/monthlies）、`--file`（单文件输出）、`--limit`（条数控制）；重构为独立 section builder，字节级 `_safe_truncate` 在 `##` 段落边界截断
+- **项目隔离**：section 命令从 stdin SessionStart JSON 自动提取项目 slug，无需 `--project` 传参
+- `on_session_start.py` 不再输出注入内容，只做 ingest + dashboard + 后台补漏
+
 ### v1.4.4 — 看板 TS+React+Vite 重构 + 项目管理 UX 改进
 
 - **看板重构**：dashboard 从原生 JS 重写为 TypeScript + React 19 + Vite 6，三页面（时间线/记忆审核/项目管理）统一 SPA 导航

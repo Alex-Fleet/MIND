@@ -147,22 +147,14 @@ def main():
     # 1. 摄入新 JSONL（快，无 LLM）。超时也不阻塞后续。
     run("ingest.py", timeout=12)
 
-    # 2. 注入上下文（快，只读 DB）→ 纯文本 stdout
-    inject_args = ["inject.py", "--json-output"]
-    if project_slug:
-        inject_args += ["--project", project_slug]
-    ok, out = run(*inject_args, timeout=15)
-
-    # 3. 后台补漏（不阻塞）
+    # 2. 后台补漏（不阻塞）
     spawn_background_catchup()
     spawn_propose_catchup()
 
-    # 输出注入内容（纯文本 stdout → 插件自动注入为上下文）
-    if ok and out:
-        print(out)   # 全量，不再只取末行
-    else:
-        # 纯文本兜底，不包 JSON（插件不吃 JSON 注入）
-        print("MIND 记忆系统已就绪。")
+    # 3. 注入内容改由 settings.json 里的多个 --section 命令各自输出，
+    #    每条独立 10K 预算，绕开 Claude Code persistHookOutput 限制。
+    #    这里只输出一句状态行（远低于 10K）。
+    print("MIND ready.")
 
 
 if __name__ == "__main__":

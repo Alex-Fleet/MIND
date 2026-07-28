@@ -65,7 +65,18 @@ memory/
 | Hook | 触发 | 干什么 | 约束 |
 |------|------|--------|------|
 | **Stop** | 每次 Claude 回复完 | ingest → summarize(LLM) → digest(check) → systemMessage/通知 | timeout 120s |
-| **SessionStart** | 新会话启动 | ingest → inject（只读DB）→ systemMessage；后台 detached 补漏摘要 | **必须 <60s**，绝不同步调 LLM |
+| **SessionStart** | 新会话启动 | ingest + dashboard 保活 + 后台补漏（on_session_start.py），注入拆为 8 条独立 section 命令（global ×4 / project / turns / dailies / monthlies），每条 < 10KB 字节绕开 Claude Code persistHookOutput 硬限制 | **必须 <60s**，绝不同步调 LLM |
+
+### SessionStart 拆分原理
+
+Claude Code hook 输出有 10KB 硬编码上限（`persistHookOutput` 阈值 `1e4` 字节），
+超出则存盘而非注入上下文。MIND 注入原单条 38-99KB 远超此限。
+**每条 hook command 独立 10KB 预算**，拆 N 条 = N × 10KB 总预算。
+
+8 条 section 命令（`inject.py --section <name>`），每条约 0.4-10KB：
+global（4 个文件各自一节）、project、turns（limit 28）、dailies（limit 5）、
+monthlies。超长文件（如 agenting-skills.md）字节级安全截断在 `##` 段落边界。
+项目隔离通过 stdin SessionStart JSON 中的 `transcript_path` 提取 slug。
 
 ## 看板 (Dashboard)
 
