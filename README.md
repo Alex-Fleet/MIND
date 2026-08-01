@@ -69,6 +69,7 @@ python3 install.py
 ```
 
 `install.py` 会自动：
+
 - 创建 `config.json`（从模板）
 - 创建 `CLAUDE.md`（铁律兜底）
 - 注册 3 个 hook（Stop / SessionStart / UserPromptSubmit）到 `~/.claude/settings.json`
@@ -81,6 +82,7 @@ python3 install.py
 问 Claude："你知道日报吗？" 如果能看到最近工作动态，就成功了。
 
 也可以开看板：
+
 ```bash
 python3 scripts/dashboard_server.py
 # 打开 http://127.0.0.1:8765
@@ -122,6 +124,13 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 摘要是 Stop hook 每轮的活，积压靠后台补漏。
 
 ## Changelog
+
+### v1.5.0 — 工程知识库：检查单补底层原理 + 工程实践 + 开源选型
+
+- **checklists 知识库扩充**：11 份检查单（data-concurrency / async-errors / observability / resources / security / compatibility / testing / api-design / frontend / reuse / opensource）各补三大块
+- **底层原理**：每板块揭示概念本质（WAL/ACID/MVCC、事件循环/状态机/背压、Little's Law、B+Tree/池化/GC、信任边界/STRIDE、SemVer/Postel、属性测试收缩、幂等数学、虚拟 DOM/渲染管线、DIP/供应链、Redis/SQLite 内部机制）
+- **工程实践手段**：每个原理配落地动作（参数化、tenacity/pybreaker、EXPLAIN、keyset 分页、CSP、feature flag、hypothesis、Idempotency-Key、Lighthouse 等）
+- **推荐开源项目**：每板块列跨语言候选 + 多维优劣（成熟度/性能/学习成本/生态/风险/适用场景），含同类替代正面对比表
 
 ### v1.4.6 — install.py 跟上拆分 + 安装教程重写
 
