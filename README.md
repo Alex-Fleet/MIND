@@ -125,6 +125,10 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.5.1 — checklists 私有化：加入 .gitignore 不进 git
+
+- **checklists 标记私有**：`memory/global/checklists/` 加入 `.gitignore`，11 份工程检查单（含底层原理/工程实践/开源选型）从 git 跟踪移除，仅本地保存——内容含个人思考与经验，不与代码分享包混在一起
+
 ### v1.5.0 — 工程知识库：检查单补底层原理 + 工程实践 + 开源选型
 
 - **checklists 知识库扩充**：11 份检查单（data-concurrency / async-errors / observability / resources / security / compatibility / testing / api-design / frontend / reuse / opensource）各补三大块
