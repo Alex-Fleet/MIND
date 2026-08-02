@@ -80,6 +80,8 @@ SESSION_START_SECTIONS = [
     ("global", "--file agenting-skills.md"),
     ("global", "--file coding-philosophy.md"),
     ("global", "--file user-profile.md"),
+    # 检查单索引：仅告知 LLM 存在这些检查单 + 路径，内容按需 Read
+    ("global", "--file checklists-index.md"),
     ("project", ""),
     ("turns", "--limit 28"),
     ("dailies", "--limit 5"),

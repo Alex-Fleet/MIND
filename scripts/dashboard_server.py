@@ -417,11 +417,14 @@ def apply_proposal(payload: dict):
             )
 
         elif prop.get("action") == "update":
-            # Replace existing section
+            # Merge new sub-sections into existing section (safe).
+            # _merge_section preserves all existing content; only updates
+            # sub-sections that already exist and appends new ones. It never
+            # deletes content the proposal didn't mention.
             target_section = prop.get("target_section", "")
             if full_path.exists():
                 existing = full_path.read_text(encoding="utf-8")
-                updated = _replace_section(existing, target_section, content)
+                updated = _merge_section(existing, target_section, content)
                 full_path.write_text(updated, encoding="utf-8")
 
             # Confirm the registry entry (boosts weight)
@@ -554,6 +557,128 @@ def _replace_section(content: str, target_section: str,
         return "\n".join(result)
     # Not found: append
     return content.rstrip() + "\n\n" + new_content + "\n"
+
+
+def _parse_subsections(text: str) -> list[tuple[str, list[str]]]:
+    """Parse ### sub-sections from markdown text.
+
+    Returns [(heading_without_prefix, body_lines)] preserving order.
+    Lines outside any ### heading are ignored (treated as intro/other).
+    """
+    subs: list[tuple[str, list[str]]] = []
+    current_heading = None
+    current_body: list[str] = []
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("### "):
+            if current_heading is not None:
+                subs.append((current_heading, current_body))
+            current_heading = stripped[4:].strip()
+            current_body = []
+        elif current_heading is not None:
+            current_body.append(line)
+
+    if current_heading is not None:
+        subs.append((current_heading, current_body))
+    return subs
+
+
+def _trim_blank_lines(lines: list[str]) -> list[str]:
+    """Trim leading/trailing blank lines from a list of markdown lines."""
+    start = 0
+    end = len(lines)
+    while start < end and not lines[start].strip():
+        start += 1
+    while end > start and not lines[end - 1].strip():
+        end -= 1
+    return lines[start:end]
+
+
+def _merge_section(content: str, target_section: str, new_content: str) -> str:
+    """Merge new sub-sections into an existing ## section (safe update).
+
+    Unlike _replace_section, this NEVER deletes existing content:
+      - Existing ### sub-sections are kept as-is, unless the proposal
+        provides a same-named sub-section (then its body is updated).
+      - New ### sub-sections from the proposal are appended at the end
+        of the target section.
+    If target_section is not found, new_content is appended at the end.
+    If new_content has no ### sub-sections, it's appended raw to the
+    target section.
+    """
+    if not target_section:
+        return content.rstrip() + "\n\n" + new_content + "\n"
+
+    clean_heading = target_section.strip().lstrip("#").strip()
+    lines = content.split("\n")
+
+    # Locate target ## section: [start, end) indices into `lines`
+    start = None
+    end = len(lines)
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        is_h2 = stripped.startswith("## ") and not stripped.startswith("### ")
+        if is_h2 and stripped[3:].strip() == clean_heading:
+            start = i
+        elif is_h2 and start is not None:
+            end = i
+            break
+
+    if start is None:
+        # Target section not found — append as new content
+        return content.rstrip() + "\n\n" + new_content + "\n"
+
+    target_body = lines[start + 1:end]
+    new_subs = _parse_subsections(new_content)
+    if not new_subs:
+        # Proposal has no sub-section headings — append raw to section end
+        return "\n".join(lines[:start + 1] + target_body +
+                         ["", new_content] + lines[end:]).rstrip() + "\n"
+
+    # Build merged body by walking the original lines. Every line that is
+    # NOT a ### sub-section (incl. free-text intro) is kept verbatim.
+    # A ### sub-section whose heading appears in the proposal is replaced
+    # by the proposal's body; everything else stays untouched.
+    merged: list[str] = []
+    updated_headings = set()
+    i = 0
+    n = len(target_body)
+    while i < n:
+        line = target_body[i]
+        stripped = line.strip()
+        if stripped.startswith("### "):
+            heading = stripped[4:].strip()
+            new_match = next(
+                (h, b) for h, b in new_subs if h == heading
+            ) if any(h == heading for h, _ in new_subs) else None
+            if new_match is not None:
+                # Replace this sub-section's body with proposal content
+                merged.append(f"### {heading}")
+                merged.append("")
+                merged.extend(_trim_blank_lines(new_match[1]))
+                merged.append("")
+                updated_headings.add(heading)
+                # Skip original body up to next ### (or end of section)
+                i += 1
+                while i < n and not target_body[i].strip().startswith("### "):
+                    i += 1
+                continue
+            merged.append(line)
+            i += 1
+        else:
+            merged.append(line)
+            i += 1
+
+    # Append sub-sections the proposal introduced
+    for heading, body in new_subs:
+        if heading not in updated_headings:
+            merged.append(f"### {heading}")
+            merged.append("")
+            merged.extend(_trim_blank_lines(body))
+            merged.append("")
+
+    return "\n".join(lines[:start + 1] + merged + lines[end:]).rstrip() + "\n"
 
 
 def _remove_section(content: str, target_section: str) -> str | None:

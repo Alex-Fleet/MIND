@@ -11,7 +11,6 @@ Usage:
   python3 memory_registry.py --check            # decay check (dry-run report)
 """
 
-import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,36 +24,18 @@ MEMORY_DIR = BASE_DIR / "memory"
 
 def effective_weight(base_weight: float, last_confirmed: str | None,
                      created_at: str | None = None) -> float:
-    """Compute effective weight using Ebbinghaus decay.
+    """有效权重 — 记忆衰减已关闭（用户偏好）。
 
-    w_effective = base_weight * exp(-days / (30 * base_weight))
+    原实现为 Ebbinghaus 遗忘曲线（w = base_weight * exp(-days / tau)），
+    长期未确认的记忆会衰减到 <0.30，从而被 decay_check 判定为
+    delete_candidates / low_weight_alerts，产生大量删除/降级提案。
 
-    Stronger memories (higher base_weight) decay slower.
-    If base_weight <= 0, returns 0.
-    If no timestamp available, returns base_weight (no decay).
+    用户决定关闭衰减：有效权重恒等于 base_weight，不随天数变化。
+    decay_check 因此永远不会生成删除/降级提案。
     """
     if base_weight <= 0:
         return 0.0
-
-    ts_str = last_confirmed or created_at
-    if not ts_str:
-        return base_weight
-
-    try:
-        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-    except (ValueError, TypeError):
-        return base_weight
-
-    now = datetime.now(timezone.utc)
-    days = (now - ts).total_seconds() / 86400.0
-    if days <= 0:
-        return base_weight
-
-    # Ebbinghaus: half-life scales with base_weight
-    tau = 30.0 * base_weight
-    return round(base_weight * math.exp(-days / tau), 4)
+    return base_weight
 
 
 def init_registry(store: Store | None = None) -> dict:

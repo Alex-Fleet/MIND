@@ -125,6 +125,12 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 
 ## Changelog
 
+### v1.5.2 — 关记忆衰减 + 检查单索引注入 + update 合并修复
+
+- **关闭记忆衰减**：`effective_weight` 不再按艾宾浩斯曲线衰减（恒等于 base_weight），`decay_check` 不再产出删除/降级提案；registry 全部 base_weight 统一 0.6
+- **检查单索引注入**：新增 `checklists-index.md` 注入 SessionStart——每次会话告知 LLM 存在 11 份工程检查单（一行定位 + 路径 + 何时用/不用），内容按需 Read，demo/一次性项目可忽略
+- **update 提案合并修复**：`apply_proposal` 的 update 从"整节替换"改为 `_merge_section` 按 `###` 子节粒度合并——保留原内容、更新同名子节、追加新子节，不再丢数据（原缺陷曾冲掉 iron-rules 架构节）
+
 ### v1.5.1 — checklists 私有化：加入 .gitignore 不进 git
 
 - **checklists 标记私有**：`memory/global/checklists/` 加入 `.gitignore`，11 份工程检查单（含底层原理/工程实践/开源选型）从 git 跟踪移除，仅本地保存——内容含个人思考与经验，不与代码分享包混在一起
