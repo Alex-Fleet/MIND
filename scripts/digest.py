@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths, load_config
 from store import Store
 from llm_utils import call_llm, call_llm_raw
+from log_setup import setup_logger
 
 # 当 --json 时，进度文本走 stderr，stdout 只留一条 JSON 供 hook 解析。
 JSON_MODE = False
@@ -285,6 +286,7 @@ def check_and_generate(store: Store, paths: dict,
 
 def main():
     global JSON_MODE
+    setup_logger()
     JSON_MODE = "--json" in sys.argv
     dry_run = "--dry-run" in sys.argv
     check = "--check" in sys.argv

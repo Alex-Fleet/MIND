@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type {
   Proposal,
   RegistryEntry,
@@ -59,6 +59,9 @@ export default function Memory() {
   )
   const [editId, setEditId] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
+  const [error, setError] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
 
   const load = useCallback(async () => {
     try {
@@ -69,8 +72,10 @@ export default function Memory() {
       setProposals(pr)
       setRegistry(rr)
       setLastUpdate(fmt(new Date().toISOString()))
+      setError(false)
     } catch {
       setLastUpdate('⚠ 连不上服务器')
+      setError(true)
     }
   }, [])
 
@@ -99,33 +104,44 @@ export default function Memory() {
         : s
   }
 
+  // 防重复提交：任一请求在途时忽略后续点击（ref 同 tick 也拦得住），成功后刷新
+  async function run(fn: () => Promise<void>) {
+    if (busyRef.current) return
+    busyRef.current = true
+    setBusy(true)
+    try {
+      await fn()
+      await load()
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
   async function doApprove(id: number) {
-    await applyProposal(id, 'approve')
-    load()
+    await run(async () => { await applyProposal(id, 'approve') })
   }
 
   async function doReject(id: number) {
-    await applyProposal(id, 'reject')
-    load()
+    await run(async () => { await applyProposal(id, 'reject') })
   }
 
   async function doApproveEdited(id: number) {
-    await applyProposal(id, 'approve', editText)
-    setEditId(null)
-    load()
+    await run(async () => {
+      await applyProposal(id, 'approve', editText)
+      setEditId(null)
+    })
   }
 
   async function doConfirm(entryId: number) {
-    await confirmRegistry(entryId)
-    load()
+    await run(async () => { await confirmRegistry(entryId) })
   }
 
   async function doRequestDelete(
     path: string,
     section: string | null,
   ) {
-    await requestDeleteRegistry(path, section)
-    load()
+    await run(async () => { await requestDeleteRegistry(path, section) })
   }
 
   function toggleScope(scope: string) {
@@ -163,6 +179,15 @@ export default function Memory() {
       >
         更新于 {lastUpdate}
       </div>
+
+      {error && (
+        <div className="error-banner">
+          ⚠ 连不上服务器
+          <span className="btn" style={{ marginLeft: 8 }} onClick={load}>
+            重试
+          </span>
+        </div>
+      )}
 
       {/* Proposals section */}
       <div className="section-title">
@@ -253,7 +278,7 @@ export default function Memory() {
                 {(p.content || '').length > 800 ? '…' : ''}
               </div>
 
-              <div className="proposal-actions">
+              <div className={`proposal-actions${busy ? ' busy' : ''}`}>
                 <span
                   className="btn success"
                   onClick={() => doApprove(p.id)}
@@ -378,6 +403,7 @@ export default function Memory() {
                       key={e.id}
                       entry={e}
                       hasProp={propRegIds.has(e.id)}
+                      busy={busy}
                       onConfirm={doConfirm}
                       onDelete={doRequestDelete}
                     />
@@ -394,11 +420,13 @@ export default function Memory() {
 function RegistryRow({
   entry,
   hasProp,
+  busy,
   onConfirm,
   onDelete,
 }: {
   entry: RegistryEntry
   hasProp: boolean
+  busy?: boolean
   onConfirm: (id: number) => void
   onDelete: (path: string, section: string | null) => void
 }) {
@@ -450,7 +478,7 @@ function RegistryRow({
         {entry.days_since_confirmed}天
       </span>
       {hasProp && (
-        <>
+        <span className={busy ? 'busy' : ''}>
           {atCap ? (
             <span
               className="btn"
@@ -493,7 +521,7 @@ function RegistryRow({
           >
             🗑
           </span>
-        </>
+        </span>
       )}
     </div>
   )

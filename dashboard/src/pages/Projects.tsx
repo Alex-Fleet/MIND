@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type {
   ProjectDef,
   ProjectsResponse,
@@ -39,6 +39,9 @@ export default function Projects() {
     new Set(),
   )
   const [unassignedOpen, setUnassignedOpen] = useState(false)
+  const [error, setError] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
 
   // Local mutable project state (drag target)
   const [projects, setProjects] = useState<ProjectDef[]>([])
@@ -69,9 +72,11 @@ export default function Projects() {
         `来源：${src}　·　${d.projects.length} 个项目　·　未分配 ${d.unassigned.length}`,
       )
       setStatusCls('')
+      setError(false)
     } catch {
       setStatus('⚠ 连不上服务器')
       setStatusCls('err')
+      setError(true)
     }
   }, [])
 
@@ -189,6 +194,9 @@ export default function Projects() {
 
   // ── Save ──
   async function save() {
+    if (savingRef.current) return  // 防重复提交：保存请求在途时忽略再次点击
+    savingRef.current = true
+    setSaving(true)
     setStatus('保存中…')
     setStatusCls('')
     const payload = {
@@ -218,13 +226,25 @@ export default function Projects() {
     } catch (e) {
       setStatus('⚠ 保存失败：' + String(e))
       setStatusCls('err')
+    } finally {
+      savingRef.current = false
+      setSaving(false)
     }
   }
 
   if (!data) {
     return (
       <div className="projects-page">
-        <div className="empty">加载中…</div>
+        {error ? (
+          <div className="empty">
+            <div>⚠ 连不上服务器</div>
+            <button className="btn" style={{ marginTop: 8 }} onClick={load}>
+              重试
+            </button>
+          </div>
+        ) : (
+          <div className="empty">加载中…</div>
+        )}
       </div>
     )
   }
@@ -535,8 +555,8 @@ export default function Projects() {
 
       {/* Save button */}
       <div style={{ marginTop: 20 }}>
-        <button className="btn primary" onClick={save}>
-          💾 保存
+        <button className="btn primary" onClick={save} disabled={saving}>
+          {saving ? '💾 保存中…' : '💾 保存'}
         </button>
       </div>
 

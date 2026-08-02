@@ -811,3 +811,19 @@ button {
   background: var(--border);
   border-radius: 3px;
 }
+
+/* ── 审计修复批次 2：失败横幅 + 请求在途禁用 ── */
+
+.error-banner {
+  background: #ffffff0d;
+  border: 1px solid #f85149;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.busy {
+  pointer-events: none;
+  opacity: 0.55;
+}

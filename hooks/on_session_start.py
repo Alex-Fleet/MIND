@@ -27,6 +27,9 @@ SCRIPTS = os.path.join(BASE, "scripts")
 PYTHON = sys.executable
 DASHBOARD_PORT = 8765
 
+sys.path.insert(0, SCRIPTS)
+from log_setup import setup_logger  # noqa: E402
+
 
 def run(script: str, *args, timeout: int = 15) -> tuple[bool, str]:
     """跑脚本，返回 (成功, stdout)。超时/异常都不抛，返回 (False, 原因)。"""
@@ -44,11 +47,18 @@ def run(script: str, *args, timeout: int = 15) -> tuple[bool, str]:
 
 def spawn_background_catchup() -> None:
     """后台补漏摘要：detached 进程，spawn 完立刻返回，不阻塞会话启动。
-    与 Stop hook 的摘要可能并发——DB 的 UNIQUE(session_id,turn_seq) 去重兜底。"""
+    与 Stop hook 的摘要可能并发——DB 的 UNIQUE(session_id,turn_seq) 去重兜底。
+    日志落盘 data/logs/summarize.log，失败不再静默。"""
+    try:
+        log_dir = os.path.join(BASE, "data", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_fp = open(os.path.join(log_dir, "summarize.log"), "a")
+    except Exception:
+        log_fp = subprocess.DEVNULL
     try:
         subprocess.Popen(
             [PYTHON, os.path.join(SCRIPTS, "summarize.py"), "--limit", "20"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=log_fp, stderr=subprocess.STDOUT,
             start_new_session=True,
         )
     except Exception:
@@ -138,6 +148,7 @@ def _extract_project_slug() -> str | None:
 
 
 def main():
+    setup_logger()
     # 0. 从 stdin 读当前项目 slug（用于注入隔离）
     project_slug = _extract_project_slug()
 
