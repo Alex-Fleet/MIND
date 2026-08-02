@@ -174,3 +174,38 @@ def test_empty_db_returns_empty_lists(store):
     assert store.get_turn_summaries_in_window(days=30) == []
     assert store.get_daily_reports_in_window(days=30) == []
     assert store.get_registry_entries() == []
+
+
+# ── Schema 版本化（批次4-项3）────────────────────────────
+
+def test_schema_version_marked_on_new_db(store):
+    """新建库自动打上当前 schema 版本号（user_version = SCHEMA_VERSION）。"""
+    import sqlite3
+    from store import SCHEMA_VERSION
+    with sqlite3.connect(store.db_path) as conn:
+        ver = conn.execute("PRAGMA user_version").fetchone()[0]
+    assert ver == SCHEMA_VERSION
+
+
+def test_legacy_db_zero_version_upgraded(store):
+    """旧库（user_version=0）打开后自动升到当前版本，不丢数据。"""
+    import sqlite3
+    from store import SCHEMA_VERSION
+    # 模拟旧库：把手动建的库 user_version 重置为 0 再重新实例化
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute("PRAGMA user_version = 0")
+    reopened = Store(db_path=store.db_path)
+    with sqlite3.connect(reopened.db_path) as conn:
+        ver = conn.execute("PRAGMA user_version").fetchone()[0]
+    assert ver == SCHEMA_VERSION
+
+
+def test_future_schema_version_raises(tmp_path):
+    """库比代码新（旧版代码打开新版库）→ 拒绝打开，防降级写坏数据。"""
+    import sqlite3
+    from store import Store
+    db = tmp_path / "future.db"
+    with sqlite3.connect(str(db)) as conn:
+        conn.execute("PRAGMA user_version = 99")
+    with pytest.raises(RuntimeError, match="比代码"):
+        Store(db_path=str(db))

@@ -15,6 +15,13 @@ from config import get_paths
 
 logger = logging.getLogger("nailong.store")
 
+# Schema 版本：表结构每变一次 +1（PRAGMA user_version 落盘）。
+# v1 = 基线（DDL + 历史幂等列 validity）。
+SCHEMA_VERSION = 1
+# 目标版本 -> 迁移函数(conn)。以后加表/改列时：SCHEMA_VERSION+1，并把迁移登记到这里。
+# 表驱动：加新版本 = 加一行，不改 _ensure_schema 的分支。
+_MIGRATIONS: dict[int, object] = {}
+
 DDL = """
 CREATE TABLE IF NOT EXISTS sessions (
     id              TEXT PRIMARY KEY,
@@ -171,12 +178,27 @@ class Store:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA busy_timeout=5000")
             conn.executescript(DDL)
-            # 幂等加列: v1.0→v1.1 有效性分类
+            # 幂等加列: v1.0→v1.1 有效性分类（v1 基线的一部分，保留幂等兜底）
             try:
                 conn.execute(
                     "ALTER TABLE turn_summaries ADD COLUMN validity TEXT")
             except sqlite3.OperationalError:
                 pass  # 列已存在
+
+            # ── Schema 版本化：user_version 记录表结构版本 ──
+            # 库比代码新（旧版 MIND 打开新版库）→ 拒绝操作，防降级写坏数据。
+            # 库比代码旧 → 按 _MIGRATIONS 表依次迁移到当前版本，再落版本号。
+            current = conn.execute("PRAGMA user_version").fetchone()[0]
+            if current > SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"数据库 schema v{current} 比代码 v{SCHEMA_VERSION} 新——"
+                    "请升级 MIND 后再使用此库")
+            if current < SCHEMA_VERSION:
+                for v in range(current + 1, SCHEMA_VERSION + 1):
+                    mig = _MIGRATIONS.get(v)
+                    if mig:
+                        mig(conn)
+                conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             conn.commit()
 
     # ── Sessions ────────────────────────────────────────
