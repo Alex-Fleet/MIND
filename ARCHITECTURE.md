@@ -99,6 +99,12 @@ Stop-hook `systemMessage` 不渲染的缺口——让总结进度看得见。
 - **写侧幂等**：`apply_proposal` 已批过直接返回（不重复写记忆/加权重）；`confirm` 同条目 30s 防重。
 - **后台可见性**：SessionStart 补漏摘要日志从 `DEVNULL` 改为落盘 `data/logs/summarize.log`，失败不再静默。
 
+## Schema 版本化与依赖管理（v1.7.0）
+
+- **Schema 版本化**：`SCHEMA_VERSION` 常量 + `PRAGMA user_version` 落盘。`store._ensure_schema` 末尾读版本号：库比代码新 → 抛错拒绝打开（防旧版代码写坏新版库）；库比代码旧 → 按 `_MIGRATIONS` 表驱动依次迁移到当前版本。v1 是基线（DDL + 历史幂等列 `validity`），以后加表/改列 = `SCHEMA_VERSION+1` + 迁移登记一行，不改分支。
+- **依赖锁定**：`requirements.txt` / `requirements-dev.txt` 全部精确版本（requests 2.33.0 / loguru 0.7.3 / pytest 9.0.3 / pip-audit 2.10.1），不浮空。
+- **依赖安全审计**：`pip-audit -r requirements.txt`（命令见 README）。v1.7.0 修复 requests 2.31.0 的 3 个已知漏洞（升级 2.33.0），当前扫描 0 漏洞。
+
 ## 代码 / 数据解耦（可移植性命根子）
 
 - `BASE_DIR = Path(__file__).resolve().parent.parent` —— 项目在哪就用哪，不认死路径。
