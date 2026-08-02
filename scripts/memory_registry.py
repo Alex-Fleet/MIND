@@ -102,6 +102,17 @@ def confirm(entry_id: int, store: Store | None = None) -> float:
         return 0.0
 
     before = entry["base_weight"]
+
+    # 幂等防重：30s 内重复 confirm 不二次 +0.2（双击/网络重试保护）
+    lc = entry.get("last_confirmed")
+    if lc:
+        try:
+            last = datetime.fromisoformat(lc.replace("Z", "+00:00"))
+            if (datetime.now(timezone.utc) - last).total_seconds() < 30:
+                return round(before, 4)
+        except ValueError:
+            pass
+
     after = min(1.0, before + 0.20)
     now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

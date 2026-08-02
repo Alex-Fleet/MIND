@@ -24,6 +24,7 @@ from config import get_paths, load_config, BASE_DIR
 from projects import Registry, slugify_id, basename_key, VALID_TYPES
 from memory_registry import effective_weight
 from store import Store
+from log_setup import setup_logger, logger
 
 PATHS = get_paths()
 DB = str(PATHS["db_path"])
@@ -347,6 +348,12 @@ def apply_proposal(payload: dict):
         return False, "Proposal not found"
 
     prop = dict(proposal_rows[0])
+
+    # 幂等防重：同一提案已批过 → 直接返回成功，不重复写记忆/加权重（双击/网络重试保护）
+    if prop.get("status") == "approved":
+        return True, "Already approved"
+    if prop.get("status") == "rejected":
+        return False, "Proposal already rejected"
 
     # Handle delete proposals: remove from file + mark registry
     if prop.get("action") == "delete":
@@ -794,8 +801,11 @@ class Handler(BaseHTTPRequestHandler):
                 ), "application/json; charset=utf-8")
             elif p.startswith("/assets/"):
                 # Vite 构建产物：/assets/xxx → dist/assets/xxx
-                asset = DIST / p.lstrip("/")
-                if asset.exists():
+                # ⚠️ resolve 后必须校验仍在 DIST 内——否则 /assets/../../etc/passwd 可穿越读任意文件
+                asset = (DIST / p.lstrip("/")).resolve()
+                if not asset.is_relative_to(DIST.resolve()):
+                    self._send(403, "forbidden", "text/plain; charset=utf-8")
+                elif asset.exists():
                     import mimetypes
                     ct = mimetypes.guess_type(str(asset))[0] or "application/octet-stream"
                     self._send(200, asset.read_bytes(), ct)
@@ -808,18 +818,34 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, svg.read_bytes(), "image/svg+xml")
                 else:
                     self._send(404, "", "text/plain; charset=utf-8")
+            elif p.startswith("/api/"):
+                # 未知 API 路由 → 404 JSON，别让 SPA 兜底吞成 200+HTML
+                self._send(404, json.dumps({"error": "not found"}),
+                           "application/json; charset=utf-8")
             else:
-                # SPA fallback：所有非 API/非静态资源路径 → index.html（React Router 接管）
+                # SPA fallback：非 API/非静态资源路径 → index.html（React Router 接管）
                 self._serve_html(HTML, "dashboard/dist/index.html 不存在")
         except Exception as e:
-            self._send(500, json.dumps({"error": str(e)}), "application/json; charset=utf-8")
+            # 异常记入 mind.log，响应只给通用 500，不向外泄露内部细节
+            setup_logger()
+            logger.exception("do_GET error: {}", self.path)
+            self._send(500, '{"error":"internal error"}',
+                       "application/json; charset=utf-8")
 
     def do_POST(self):
         try:
             p = self.path.split("?")[0].rstrip("/")
             n = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(n).decode("utf-8") if n else "{}"
-            payload = json.loads(body)
+            try:
+                payload = json.loads(body)
+            except (ValueError, UnicodeDecodeError):
+                self._send(400,
+                           json.dumps({"ok": False,
+                                       "errors": ["请求体不是合法 JSON"]},
+                                      ensure_ascii=False),
+                           "application/json; charset=utf-8")
+                return
 
             if p == "/api/projects":
                 ok, errs = save_projects(payload)
@@ -852,7 +878,9 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(404, "not found", "text/plain; charset=utf-8")
         except Exception as e:
-            self._send(500, json.dumps({"error": str(e)}, ensure_ascii=False),
+            setup_logger()
+            logger.exception("do_POST error: {}", self.path)
+            self._send(500, '{"error":"internal error"}',
                        "application/json; charset=utf-8")
 
     def log_message(self, *args):
@@ -860,6 +888,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    setup_logger()
     cfg = load_config().get("dashboard", {})
     port = cfg.get("port", 8765)
     if "--port" in sys.argv:

@@ -21,6 +21,7 @@ from config import get_paths, load_config
 from store import Store
 from llm_utils import call_llm
 from memory_registry import decay_check, effective_weight, boost_by_reference
+from log_setup import setup_logger
 
 DRY_RUN = False
 
@@ -187,6 +188,7 @@ def _process_llm_response(response: dict, store: Store) -> dict:
 
 def main():
     global DRY_RUN
+    setup_logger()
     DRY_RUN = "--dry-run" in sys.argv
 
     since = None
