@@ -166,6 +166,10 @@ class Store:
 
     def _ensure_schema(self):
         with sqlite3.connect(self.db_path) as conn:
+            # WAL：崩溃不损坏 DB + 读不阻塞写（持久化，设一次终身生效）。
+            # busy_timeout：写冲突等 5s 而非立刻报 database is locked。
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=5000")
             conn.executescript(DDL)
             # 幂等加列: v1.0→v1.1 有效性分类
             try:

@@ -22,6 +22,9 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(BASE, "scripts")
 PYTHON = sys.executable
 
+sys.path.insert(0, SCRIPTS)
+from log_setup import setup_logger  # noqa: E402
+
 
 def log(msg: str) -> None:
     """诊断输出 → stderr（stdout 只留给 systemMessage 的 JSON）。"""
@@ -126,6 +129,7 @@ def build_broadcast(summ: dict | None, dig: dict | None) -> str:
 
 
 def main():
+    setup_logger()
     log("MIND Stop hook")
 
     # Step 1: Ingest (fast, no LLM)

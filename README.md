@@ -45,7 +45,7 @@ Memory Plugin/                 # 项目根（可放任意位置）
 
 ### 你需要的
 
-- **Python 3.9+** — mac 自带，或 `brew install python3`
+- **Python 3.10+** — 代码用了 `str | None` 语法，3.9 会直接报错；mac 自带版本可能不足，建议 `brew install python3`
 - **VS Code + Claude Code 扩展**
 - **DeepSeek API 密钥**（或 Anthropic）
 
@@ -105,6 +105,8 @@ python3 scripts/summarize.py --json --limit 5   # 结构化输出（hook 用）
 python3 scripts/inject.py --json-output         # 查看注入的 systemMessage
 python3 scripts/digest.py --check --json        # 检查并生成日报/月报
 python3 scripts/recall.py "关键词"               # 手动回忆
+python3 scripts/backup.py                       # 数据库备份（在线快照，保留7份）
+python3 -m pytest tests/                        # 跑全部测试（需 pip install -r requirements-dev.txt）
 python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1:8765
 ```
 
@@ -124,6 +126,15 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 摘要是 Stop hook 每轮的活，积压靠后台补漏。
 
 ## Changelog
+
+### v1.6.0 — 检查单审计修复：WAL/日志/备份/测试/API 语义/幂等
+
+- **数据安全**：SQLite 开 WAL + busy_timeout（崩溃不损坏、读写不互堵）；新增 `scripts/backup.py` 在线一致性备份（保留 7 份，`VACUUM INTO` 不锁库）
+- **可观测性**：loguru 统一日志落盘 `data/logs/mind.log`（级别+时间戳、1MB 轮转、保留 5 份，不污染 hook 协议输出）；后台补漏摘要失败不再静默（落盘 summarize.log）
+- **测试体系**：pytest 全量（原 test_projects + 新增 test_store / test_api）；`requirements-dev.txt` 声明测试依赖
+- **API/安全**：未知 `/api/*` 返 404 JSON、坏 JSON 返 400、`/assets/` 路径穿越修复（403）、500 不回内部细节
+- **幂等**：`apply_proposal` 已批过直接返回（不重复写记忆/加权重）、`confirm` 30s 防重；前端三页加失败态+重试按钮、写操作防重复提交、ErrorBoundary 兜底白屏
+- **兼容**：README 声明 Python 3.9+ → **3.10+**（代码用 `str | None` 语法，3.9 会报错）
 
 ### v1.5.2 — 关记忆衰减 + 检查单索引注入 + update 合并修复
 

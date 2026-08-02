@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths, load_config
 from store import Store
 from projects import Registry
+from log_setup import setup_logger
 
 
 def _resolve_project_slugs(slug: str) -> list[str] | None:
@@ -511,6 +512,7 @@ def _extract_slug_from_stdin() -> str | None:
 
 
 def main():
+    setup_logger()
     section = None
     try:
         si = sys.argv.index("--section")
@@ -590,7 +592,8 @@ def main():
     sys_msg = build_system_message(store, project_slugs=project_slugs)
 
     if json_output:
-        print(sys_msg)
+        # docstring 约定输出 {"systemMessage": "..."}（hook 用 --section，此处仅调试）
+        print(json.dumps({"systemMessage": sys_msg}, ensure_ascii=False))
     elif stdout:
         print(sys_msg)
     else:
