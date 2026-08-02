@@ -107,6 +107,7 @@ python3 scripts/digest.py --check --json        # 检查并生成日报/月报
 python3 scripts/recall.py "关键词"               # 手动回忆
 python3 scripts/backup.py                       # 数据库备份（在线快照，保留7份）
 python3 -m pytest tests/                        # 跑全部测试（需 pip install -r requirements-dev.txt）
+pip-audit -r requirements.txt                   # 依赖安全审计（需 pip install pip-audit）
 python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1:8765
 ```
 
@@ -126,6 +127,11 @@ python3 scripts/dashboard_server.py             # 启看板 → http://127.0.0.1
 摘要是 Stop hook 每轮的活，积压靠后台补漏。
 
 ## Changelog
+
+### v1.7.0 — schema 版本化 + 依赖锁定与安全审计
+
+- **Schema 版本化**：`PRAGMA user_version` 记录表结构版本（`SCHEMA_VERSION` + 表驱动迁移表 `_MIGRATIONS`）；旧库自动升级、用旧版代码打开新版库会拒绝并提示升级
+- **依赖安全**：requests 2.31.0 → **2.33.0**（修复 3 个已知漏洞，pip-audit 扫描 **0 漏洞**）；全部依赖精确锁版本；新增 `pip-audit -r requirements.txt` 审计命令（见"手动常用命令"）
 
 ### v1.6.0 — 检查单审计修复：WAL/日志/备份/测试/API 语义/幂等
 
