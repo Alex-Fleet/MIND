@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths
 from store import Store
+from log_setup import setup_logger
 
 
 def search_turn_summaries(store: Store, query: str,
@@ -97,6 +98,7 @@ def list_recent(store: Store, days: int = 7):
 
 
 def main():
+    setup_logger()
     if "--list" in sys.argv:
         store = Store()
         list_recent(store)

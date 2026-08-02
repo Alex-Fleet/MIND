@@ -37,6 +37,7 @@ type TypeFilter = 'all' | 'turn' | 'daily' | 'monthly'
 export default function Timeline() {
   const [data, setData] = useState<FeedResponse | null>(null)
   const [lastUpdate, setLastUpdate] = useState('')
+  const [error, setError] = useState(false)
   const [type, setType] = useState<TypeFilter>('all')
   const [projIdx, setProjIdx] = useState<number>(0)
   const [hideNonLong, setHideNonLong] = useState(true)
@@ -48,8 +49,10 @@ export default function Timeline() {
       const d = await fetchFeed()
       setData(d)
       setLastUpdate(fmt(new Date().toISOString()))
+      setError(false)
     } catch {
       setLastUpdate('⚠ 连不上服务器')
+      setError(true)
     }
   }, [])
 
@@ -70,7 +73,16 @@ export default function Timeline() {
   if (!data) {
     return (
       <div className="timeline">
-        <div className="empty">加载中…</div>
+        {error ? (
+          <div className="empty">
+            <div>⚠ 连不上服务器</div>
+            <button className="btn" style={{ marginTop: 8 }} onClick={load}>
+              重试
+            </button>
+          </div>
+        ) : (
+          <div className="empty">加载中…</div>
+        )}
       </div>
     )
   }

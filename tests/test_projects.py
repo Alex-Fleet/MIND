@@ -2,8 +2,9 @@
 """
 对抗性测试：scripts/projects.py 的 Registry —— 核心是"双向唯一(bijection)"不变量。
 
-纯 python assert，不依赖 pytest：
-    python3 tests/test_projects.py
+两种跑法皆可（test_* 函数会被 pytest 自动收集）：
+    python3 tests/test_projects.py     # 独立运行（自带迷你框架）
+    pytest tests/test_projects.py      # 走 pytest（推荐）
 
 覆盖：合法注册表的查询、未登记 slug 的自我隔离、每一类违规是否被 validate 抓到、
 save() 拒绝写坏文件、load() 容错、load→save→load 往返、unregistered、

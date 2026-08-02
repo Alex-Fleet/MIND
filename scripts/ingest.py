@@ -15,6 +15,7 @@ from pathlib import Path
 
 from config import get_paths
 from store import Store
+from log_setup import setup_logger
 
 
 def extract_text(content_blocks) -> str:
@@ -143,6 +144,7 @@ def ingest_all(store: Store, project_filter: str | None = None,
 
 
 def main():
+    setup_logger()
     project_filter = None
     session_filter = None
     args = sys.argv[1:]
