@@ -11,7 +11,7 @@
 | **Claude Code 原生记忆** | `~/.claude/projects/<项目slug>/memory/*.md` | 每项目一个文件夹 | Claude Code 内建，按项目加载 |
 | **MIND** | 本项目 `data/`（中心库 + 存档） | 全项目集中，`project` 字段区分 | MIND hook 注入 |
 
-- **全局记忆（可编辑）** → `memory/global/*.md`（用户铁律、技能、偏好）+ `memory/projects/<id>/*.md`（项目专属背景/经验），`inject.py` 两层 glob 注入。`CLAUDE.md` 做静态兜底。
+- **全局记忆（可编辑）** → `memory/global/*.md`（用户辅助性程序设计规范、技能、偏好）+ `memory/projects/<id>/*.md`（项目专属背景/经验），`inject.py` 两层 glob 注入。`CLAUDE.md` 做静态兜底。
 - **项目摘要** → MIND中心库 `turn_summaries` / `daily_reports` / `monthly_reports`，`project` 字段区分。
 
 ### `memory/` 目录结构
@@ -20,14 +20,14 @@
 memory/
 ├── global/                    # 全局注入（所有项目）
 │   ├── user-profile.md        # 用户介绍 + 开发环境
-│   ├── iron-rules.md          # 铁律（10 域 × 阶段）
+│   ├── programming-standards.md  # 辅助性程序设计规范（10 域 × 阶段）
 │   ├── agenting-skills.md     # Agent 编排技能
 │   └── coding-philosophy.md   # 代码风格 + Prompt 哲学
 ├── projects/                  # 按项目 ID 匹配注入
 │   └── <project-id>/
 │       └── context.md         # 项目背景 / 关键决策 / 经验
 ├── user-profile.example.md    # 模板（进 git）
-├── iron-rules.example.md
+├── programming-standards.example.md
 └── project-context.example.md
 ```
 
@@ -119,8 +119,8 @@ Stop-hook `systemMessage` 不渲染的缺口——让总结进度看得见。
 - **中心库**（非每项目一库）：跨项目查询方便，`project` 字段区分。
 - **SessionStart 必须快**：Claude Code 有 ~60s 启动硬上限，同步 LLM 会卡死；摘要移到 Stop + 后台。
 - **不依赖 langchain**：直接 requests 调 DeepSeek，旧系统靠 langchain 是没跑起来的根因之一。
-- **双通道注入**：systemMessage（动态简报 + memory/ 文件）+ CLAUDE.md（静态铁律兜底）。
-- **全局记忆文件化**：铁律/偏好/技能从 DB `preferences` 表迁至 `memory/` 可编辑 markdown。两层 glob（global + projects/）自动注入，加文件不改代码。
+- **双通道注入**：systemMessage（动态简报 + memory/ 文件）+ CLAUDE.md（静态辅助性程序设计规范兜底）。
+- **全局记忆文件化**：辅助性程序设计规范/偏好/技能从 DB `preferences` 表迁至 `memory/` 可编辑 markdown。两层 glob（global + projects/）自动注入，加文件不改代码。
 - **记忆生命周期管理**（v1.3.1）：自动化发现→提案→审核→淘汰闭环。
   - `memory_registry` 表：每条记忆注册元数据（scope / base_weight / 确认次数 / 最后确认时间），按 `##` 章节粒度追踪。
   - **艾宾浩斯衰减**：`w_effective = base_weight × e^(-days / (30 × base_weight))`，强记忆慢衰减、弱记忆快淘汰。权重只影响淘汰建议，不影响注入。

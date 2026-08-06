@@ -13,7 +13,7 @@ config.json
 .env
 *.key
 
-# ── CLAUDE.md — MIND 生成，含用户个人铁律 ──
+# ── CLAUDE.md — MIND 生成，含用户个人辅助性程序设计规范 ──
 CLAUDE.md
 
 # ── 全局记忆 — 用户可编辑，含个人信息 ──

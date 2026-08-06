@@ -160,7 +160,8 @@ def main():
 
     # 2. 后台补漏（不阻塞）
     spawn_background_catchup()
-    spawn_propose_catchup()
+    # 记忆审核自动提议已关闭（用户 2026-08-06 决定）：不再后台自动
+    # propose_memories.py，需要时手动 `python3 scripts/propose_memories.py --dry-run`。
 
     # 3. 注入内容改由 settings.json 里的多个 --section 命令各自输出，
     #    每条独立 10K 预算，绕开 Claude Code persistHookOutput 限制。

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit hook — 每次用户按回车注入铁律。"""
+"""UserPromptSubmit hook — 每次用户按回车注入辅助性程序设计规范。"""
 
 import sys
 from pathlib import Path
 
-IRON_RULES = Path(__file__).resolve().parent.parent / "memory" / "global" / "iron-rules.md"
+STANDARDS = Path(__file__).resolve().parent.parent / "memory" / "global" / "programming-standards.md"
 
-if IRON_RULES.exists():
-    content = IRON_RULES.read_text(encoding="utf-8").strip()
+if STANDARDS.exists():
+    content = STANDARDS.read_text(encoding="utf-8").strip()
     print(content)

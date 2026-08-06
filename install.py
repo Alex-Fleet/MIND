@@ -76,7 +76,7 @@ def _is_nailong(entry: dict, script: str) -> bool:
 # SessionStart 拆分：on_session_start.py + 8 条 inject --section 命令
 # 每条独立 10KB 预算，绕开 Claude Code persistHookOutput 硬限制
 SESSION_START_SECTIONS = [
-    ("global", "--file iron-rules.md"),
+    ("global", "--file programming-standards.md"),
     ("global", "--file agenting-skills.md"),
     ("global", "--file coding-philosophy.md"),
     ("global", "--file user-profile.md"),
@@ -141,7 +141,7 @@ def main():
                if not _is_nailong(e, "on_session_start.py")]
     hooks["SessionStart"] = kept_ss + [_build_session_start_entry()]
 
-    # UserPromptSubmit hook（每轮注入铁律）
+    # UserPromptSubmit hook（每轮注入辅助性程序设计规范）
     kept_ups = [e for e in hooks.get("UserPromptSubmit", [])
                 if not _is_nailong(e, "on_prompt.py")]
     hooks["UserPromptSubmit"] = kept_ups + [
