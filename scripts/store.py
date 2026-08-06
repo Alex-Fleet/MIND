@@ -673,6 +673,36 @@ class Store:
             conn.commit()
             return True
 
+    def rename_registry_path(self, old_path: str, new_path: str) -> int:
+        """数据修正：把 registry 里所有旧路径条目改到新路径（幂等）。
+
+        用于文件名改名后同步 DB 元数据。返回改动的行数。
+        若 new_path 与某条已存在条目的 (file_path, section_heading)
+        唯一键冲突，跳过该条（不覆盖已有数据）。
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT id, section_heading FROM memory_registry "
+                "WHERE file_path = ?", (old_path,)
+            ).fetchall()
+            changed = 0
+            for rid, section in rows:
+                exists = conn.execute(
+                    "SELECT 1 FROM memory_registry "
+                    "WHERE file_path = ? AND section_heading IS ?",
+                    (new_path, section)
+                ).fetchone()
+                if exists:
+                    continue  # 新路径已有同 section 条目，跳过防覆盖
+                conn.execute(
+                    "UPDATE memory_registry SET file_path = ?, "
+                    "updated_at = datetime('now') WHERE id = ?",
+                    (new_path, rid)
+                )
+                changed += 1
+            conn.commit()
+            return changed
+
     # ── Memory Proposals (v1.4) ────────────────────────────
 
     def insert_memory_proposal(self, action: str, scope: str,

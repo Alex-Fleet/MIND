@@ -120,12 +120,46 @@ def test_get_missing_daily_dates_empty(store):
 
 def test_registry_upsert_and_get(store):
     rid = store.upsert_registry_entry(
-        "memory/global/iron-rules.md", "架构", "global", 0.6)
+        "memory/global/programming-standards.md", "架构", "global", 0.6)
     assert rid is not None
-    entry = store.get_registry_entry("memory/global/iron-rules.md", "架构")
+    entry = store.get_registry_entry("memory/global/programming-standards.md", "架构")
     assert entry is not None
     assert entry["scope"] == "global"
     assert entry["base_weight"] == 0.6
+
+
+def test_rename_registry_path_updates_all_rows(store):
+    """数据修正：旧路径 → 新路径，所有行都改，且幂等。"""
+    for sec in ("架构", "Git", "测试"):
+        store.upsert_registry_entry("memory/global/iron-rules.md", sec, "global", 0.6)
+    changed = store.rename_registry_path(
+        "memory/global/iron-rules.md", "memory/global/programming-standards.md")
+    assert changed == 3
+    # 旧路径已清空
+    assert store.get_registry_entry("memory/global/iron-rules.md", "架构") is None
+    # 新路径可查
+    for sec in ("架构", "Git", "测试"):
+        e = store.get_registry_entry("memory/global/programming-standards.md", sec)
+        assert e is not None
+    # 再跑一次幂等：0 条
+    assert store.rename_registry_path(
+        "memory/global/iron-rules.md", "memory/global/programming-standards.md") == 0
+
+
+def test_rename_registry_path_no_clobber_existing(store):
+    """新路径已有同 section 条目时，跳过不覆盖。"""
+    store.upsert_registry_entry("memory/global/iron-rules.md", "架构", "global", 0.6)
+    store.upsert_registry_entry("memory/global/programming-standards.md", "架构", "global", 0.9)
+    changed = store.rename_registry_path(
+        "memory/global/iron-rules.md", "memory/global/programming-standards.md")
+    assert changed == 0  # 冲突，全部跳过
+    e = store.get_registry_entry("memory/global/programming-standards.md", "架构")
+    assert e["base_weight"] == 0.9  # 原有数据未被覆盖
+
+
+def test_rename_registry_path_absent_old_is_noop(store):
+    """旧路径本就不存在 → 0 条，不报错。"""
+    assert store.rename_registry_path("memory/global/nope.md", "memory/global/x.md") == 0
 
 
 def test_registry_upsert_same_key_updates_not_duplicates(store):
