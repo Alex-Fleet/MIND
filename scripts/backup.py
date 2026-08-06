@@ -8,7 +8,7 @@ MIND 备份 — 数据库一致性快照。
   python3 scripts/backup.py --check    # 只检查今天是否已备份（供脚本/定时器判断）
 
 原理：VACUUM INTO 是 SQLite 原生的在线一致性快照——不锁库、不停服务。
-备份存 data/backups/nailong-YYYYMMDD.db，保留最近 7 份，更旧的自动删除。
+备份存 data/backups/nailong-YYYYMMDD.db，保留最近 KEEP 份（默认 2），更旧的自动删除。
 """
 
 import argparse
@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths
 from log_setup import setup_logger
 
-KEEP = 7  # 保留最近 7 份每日备份
+KEEP = 2  # 保留最近 2 份每日备份（用户定：同目录备份只防「坏」不防「丢」，原始数据在 JSONL 可重建）
 
 
 def backups_dir() -> Path:

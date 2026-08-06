@@ -45,6 +45,26 @@ def run(script: str, *args, timeout: int = 15) -> tuple[bool, str]:
         return False, str(e)
 
 
+def spawn_daily_backup() -> None:
+    """后台每日备份：backup.py 自带「今天已备过则跳过」，每次会话启动调，
+    实际每天只真正备份一次（KEEP=2）。detached 进程，不阻塞会话启动。
+    VACUUM INTO 全库快照可能耗时，放后台 + 日志落盘 backup.log。"""
+    try:
+        log_dir = os.path.join(BASE, "data", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_fp = open(os.path.join(log_dir, "backup.log"), "a")
+    except Exception:
+        log_fp = subprocess.DEVNULL
+    try:
+        subprocess.Popen(
+            [PYTHON, os.path.join(SCRIPTS, "backup.py")],
+            stdout=log_fp, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except Exception:
+        pass
+
+
 def spawn_background_catchup() -> None:
     """后台补漏摘要：detached 进程，spawn 完立刻返回，不阻塞会话启动。
     与 Stop hook 的摘要可能并发——DB 的 UNIQUE(session_id,turn_seq) 去重兜底。
@@ -157,6 +177,10 @@ def main():
 
     # 1. 摄入新 JSONL（快，无 LLM）。超时也不阻塞后续。
     run("ingest.py", timeout=12)
+
+    # 1.5 后台每日备份（不阻塞）：backup.py 自带「今天已备过则跳过」，
+    #     每天只会真正备份一次（KEEP=2）。
+    spawn_daily_backup()
 
     # 2. 后台补漏（不阻塞）
     spawn_background_catchup()

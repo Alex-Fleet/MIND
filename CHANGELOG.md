@@ -2,11 +2,12 @@
 
 ## [Unreleased]
 
-## [v1.8.0-alpha.1] - 2026-08-06
+## [v1.8.0] - 2026-08-06
 
 - **改名**：`iron-rules.md` → `programming-standards.md`（「铁律」→「辅助性程序设计规范」），同步更新 hook/installer/文档/测试引用；新增改名完整性测试 `tests/test_rename.py`（全仓库 `iron-rules` 残留扫描）
 - **数据迁移工具**：新增 `scripts/rename_memory_path.py` + `Store.rename_registry_path()`，改名后同步迁移 `memory_registry` 表旧路径（幂等，冲突跳过不覆盖）
 - **记忆审核**：自动提议默认关闭（`on_session_start.py` 不再后台触发 `propose_memories.py`，需要时手动 `--dry-run`）；清理 12 条重复待审核提案（rejected）
+- **备份自动触发**：SessionStart hook 后台每天跑一次 `backup.py`（`spawn_daily_backup()`，不阻塞启动，自带当天去重）；KEEP 从 7 降到 2（同目录备份只防「坏」不防「丢」，原始数据在 JSONL 可重建）
 
 ## [v1.7.0] - schema 版本化 + 依赖锁定与安全审计
 
