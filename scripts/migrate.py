@@ -7,7 +7,6 @@ Run once. Safe to re-run (idempotent).
 
 import json
 import os
-import re
 import shutil
 import sqlite3
 import sys
@@ -33,7 +32,7 @@ def copy_old_db(paths: dict) -> None:
         shutil.copy2(OLD_DB, dest)
         print(f"  ✓ 复制旧 DB → {dest}")
     else:
-        print(f"  - 旧 DB 副本已存在，跳过")
+        print("  - 旧 DB 副本已存在，跳过")
 
 
 def migrate_conversations(store: Store) -> int:
@@ -226,7 +225,7 @@ def main():
     print(f"  旧对话: {n_turns} turns (legacy)")
     print(f"  旧记忆: {n_memories} 条")
     print(f"  偏好: {n_prefs} sections")
-    print(f"  数据库总计:")
+    print("  数据库总计:")
     print(f"    sessions:     {stats['sessions']}")
     print(f"    turns:        {stats['turns']}")
     print(f"    turn摘要:     {stats['turn_summaries']}")

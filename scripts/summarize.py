@@ -20,9 +20,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths
-from store import Store
-from llm_utils import call_llm, LLMFatalError
+from llm_utils import LLMFatalError, call_llm
 from log_setup import setup_logger
+from store import Store
 
 # 当 --json 时，进度文本走 stderr（进 transcript），stdout 只留一条 JSON 供 hook 解析。
 JSON_MODE = False
@@ -125,11 +125,9 @@ def _is_continuation(content: str) -> bool:
     if len(first_line) <= 15 and _CONTINUATION_RE.match(first_line):
         return True
     # 极短纯标点/语气词
-    if len(first_line) <= 5 and not any(
+    return len(first_line) <= 5 and not any(
         kw in first_line for kw in ["错", "不", "改", "修", "加", "删", "做", "写", "跑"]
-    ):
-        return True
-    return False
+    )
 
 
 _SYSTEM_NOISE_RE = re.compile(

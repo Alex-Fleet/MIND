@@ -1,0 +1,17 @@
+# MIND 工程配置 — lint / 测试 / 依赖
+# ruff 是 lint + format 一体（取代 flake8 + black + isort），集中配置在此。
+
+[tool.ruff.lint]
+# 以下规则与 MIND 刻意设计冲突，全局忽略（每条注明理由，改动前先读这里）：
+extend-ignore = [
+  "BLE001",  # 刻意宽捕获 `except Exception`——hook 致命保护、后台 spawn 静默兜底，绝不抛（Robustness: 失败要有兜底不崩）
+  "EXE001",  # 统一 `python3 xxx.py` 调用，脚本不需要可执行位（shebang 仅作声明）
+  "DTZ005",  # 本地时间/北京时间日切（v1.4.2 刻意 naive datetime），不引入 tzinfo
+  "PLW1510", # run() helper 刻意不 `check`——捕获异常返回 (False, reason)，check=True 会传播异常破坏 hook
+  "SIM115",  # open 不用 with——log_fp 需传给 subprocess.Popen 并保持打开，with 会提前关闭文件
+  "S110",    # try-except-pass：后台 spawn 失败静默，刻意不阻塞启动
+  "S112",    # try-except-continue：遍历失败跳过继续（同上，静默兜底）
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

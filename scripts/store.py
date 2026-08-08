@@ -8,8 +8,6 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime
-from pathlib import Path
 
 from config import get_paths
 

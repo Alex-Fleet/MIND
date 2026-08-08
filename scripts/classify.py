@@ -15,15 +15,14 @@
 安全：只写 *.draft.json，不生效、不碰注入。过目无误后改名成 projects.json 才生效。
 """
 
-import json
 import sqlite3
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import get_paths, BASE_DIR
-from projects import Registry, slugify_id, basename_key, VALID_TYPES
+from config import BASE_DIR, get_paths
 from llm_utils import call_llm
+from projects import VALID_TYPES, Registry, basename_key, slugify_id
 
 DRAFT_PATH = BASE_DIR / "projects.draft.json"
 

@@ -17,14 +17,14 @@ import sqlite3
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import get_paths, load_config, BASE_DIR
-from projects import Registry, slugify_id, basename_key, VALID_TYPES
+from config import BASE_DIR, get_paths, load_config
+from log_setup import logger, setup_logger
 from memory_registry import effective_weight
+from projects import VALID_TYPES, Registry, basename_key, slugify_id
 from store import Store
-from log_setup import setup_logger, logger
 
 PATHS = get_paths()
 DB = str(PATHS["db_path"])
@@ -413,7 +413,6 @@ def apply_proposal(payload: dict):
                 )
 
             # Add to registry
-            from memory_registry import init_registry
             # Re-scan just this file
             scope = prop.get("scope", "global")
             store.upsert_registry_entry(
@@ -727,7 +726,7 @@ def _remove_section(content: str, target_section: str) -> str | None:
 
 def _days_since(ts_str: str) -> int:
     """Compute days since an ISO timestamp."""
-    from datetime import datetime, timezone
+    from datetime import timezone
     try:
         ts = __import__("datetime").datetime.fromisoformat(
             ts_str.replace("Z", "+00:00")
@@ -825,7 +824,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 # SPA fallback：非 API/非静态资源路径 → index.html（React Router 接管）
                 self._serve_html(HTML, "dashboard/dist/index.html 不存在")
-        except Exception as e:
+        except Exception:
             # 异常记入 mind.log，响应只给通用 500，不向外泄露内部细节
             setup_logger()
             logger.exception("do_GET error: {}", self.path)
@@ -877,7 +876,7 @@ class Handler(BaseHTTPRequestHandler):
                                "application/json; charset=utf-8")
             else:
                 self._send(404, "not found", "text/plain; charset=utf-8")
-        except Exception as e:
+        except Exception:
             setup_logger()
             logger.exception("do_POST error: {}", self.path)
             self._send(500, '{"error":"internal error"}',
