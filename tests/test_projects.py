@@ -20,13 +20,12 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import projects  # noqa: E402
-from projects import (  # noqa: E402
-    Registry,
-    slugify_id,
-    basename_key,
-    VALID_TYPES,
+from projects import (
     DEFAULT_TYPE,
+    VALID_TYPES,
+    Registry,
+    basename_key,
+    slugify_id,
 )
 
 # ── 迷你测试框架：数清楚跑了多少条 ───────────────────────────────────────────
@@ -476,7 +475,7 @@ def main():
         except AssertionError as e:
             failures.append((t.__name__, str(e)))
             print(f"FAIL  {t.__name__}: {e}")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             failures.append((t.__name__, f"{type(e).__name__}: {e}"))
             print(f"ERR   {t.__name__}: {type(e).__name__}: {e}")
 

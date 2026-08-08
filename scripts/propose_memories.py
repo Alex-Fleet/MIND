@@ -13,15 +13,13 @@ Usage:
 
 import json
 import sys
-from datetime import datetime, date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import get_paths, load_config
-from store import Store
 from llm_utils import call_llm
-from memory_registry import decay_check, effective_weight, boost_by_reference
 from log_setup import setup_logger
+from memory_registry import boost_by_reference, decay_check, effective_weight
+from store import Store
 
 DRY_RUN = False
 
@@ -136,7 +134,7 @@ def _process_llm_response(response: dict, store: Store) -> dict:
             print(json.dumps(candidate, ensure_ascii=False, indent=2))
             continue
 
-        pid = store.insert_memory_proposal(
+        store.insert_memory_proposal(
             action=candidate.get("action", "create"),
             scope=candidate.get("scope", "global"),
             title=candidate.get("title", "Untitled"),

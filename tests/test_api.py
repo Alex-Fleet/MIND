@@ -84,7 +84,7 @@ def test_projects_returns_200_json(api_server):
 def test_unknown_api_route_returns_404_json(api_server):
     base = api_server
     try:
-        with urllib.request.urlopen(base + "/api/nope", timeout=3) as r:
+        with urllib.request.urlopen(base + "/api/nope", timeout=3):
             assert False, "应返回 404 却得到 200"
     except urllib.error.HTTPError as e:
         assert e.code == 404
