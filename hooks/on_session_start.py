@@ -19,8 +19,8 @@ Expected output: 纯文本（插件自动注入为上下文）
 
 import os
 import socket
-import sys
 import subprocess
+import sys
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(BASE, "scripts")
@@ -28,7 +28,7 @@ PYTHON = sys.executable
 DASHBOARD_PORT = 8765
 
 sys.path.insert(0, SCRIPTS)
-from log_setup import setup_logger  # noqa: E402
+from log_setup import setup_logger
 
 
 def run(script: str, *args, timeout: int = 15) -> tuple[bool, str]:
@@ -169,8 +169,6 @@ def _extract_project_slug() -> str | None:
 
 def main():
     setup_logger()
-    # 0. 从 stdin 读当前项目 slug（用于注入隔离）
-    project_slug = _extract_project_slug()
 
     # 0.5 看板保活：检测端口，没跑就后台拉起（非阻塞）
     spawn_dashboard()

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """清理 2026-07-10 错误记忆（旧系统配对错乱产物），删后自动重摘要+重跑日报。"""
-import os, sqlite3, sys
+import os
+import sqlite3
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import get_paths, BASE_DIR
+from config import BASE_DIR, get_paths
 from store import Store
 
 
 def main():
     paths = get_paths()
-    store = Store()
+    store = Store()  # noqa: F841 —— Store() 构造初始化 DB schema（副作用），变量本脚本不使用
     db = str(paths["db_path"])
-    turns_dir = str(paths["turns_dir"])
-    daily_dir = str(paths["daily_dir"])
 
     conn = sqlite3.connect(db)
     conn.row_factory = sqlite3.Row
@@ -68,7 +68,6 @@ def main():
     # ── 5. 重摘要 7-10 的 turns ──
     print("\n5. 重摘要 7-10 turns（LLM 调用，需等待）...")
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    summarize_py = os.path.join(script_dir, "summarize.py")
     r = os.system(f"cd '{script_dir}' && python3 summarize.py 2>&1")
     if r != 0:
         print(f"   ⚠ summarize.py 退出码 {r}")

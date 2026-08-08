@@ -1,4 +1,5 @@
 -r requirements.txt
-# 开发/测试依赖（运行时是 requests + loguru；pytest 测试用；pip-audit 依赖安全审计）
+# 开发/测试依赖（运行时是 requests + loguru；pytest 测试用；pip-audit 依赖安全审计；ruff lint+format）
 pytest==9.0.3
 pip-audit==2.10.1
+ruff==0.16.1

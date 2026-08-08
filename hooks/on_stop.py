@@ -15,15 +15,15 @@ Called by: settings.json Stop hook (timeout 120s)
 
 import json
 import os
-import sys
 import subprocess
+import sys
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(BASE, "scripts")
 PYTHON = sys.executable
 
 sys.path.insert(0, SCRIPTS)
-from log_setup import setup_logger  # noqa: E402
+from log_setup import setup_logger
 
 
 def log(msg: str) -> None:

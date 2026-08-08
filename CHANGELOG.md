@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **CI 落地**：新增 `.github/workflows/ci.yml`（push/PR 触发：ruff check → pytest）+ `audit.yml`（每周 cron：pip-audit）；新增 `pyproject.toml`（ruff 集中配置 + pytest testpaths）；`requirements-dev.txt` 锁定 ruff==0.16.1；全仓 lint 清理至 0 告警（自动修 66 处 + 手动处理 10 处，含刻意保留的副作用构造标注）
+
 ## [v1.8.0] - 2026-08-06
 
 - **改名**：`iron-rules.md` → `programming-standards.md`（「铁律」→「辅助性程序设计规范」），同步更新 hook/installer/文档/测试引用；新增改名完整性测试 `tests/test_rename.py`（全仓库 `iron-rules` 残留扫描）

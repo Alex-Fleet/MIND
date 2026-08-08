@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """对 7-14 已有摘要做有效性分类：Layer 1 正则 + Layer 2 LLM 判断，更新 validity 列。"""
-import os, sys, sqlite3
+import sqlite3
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths
-from store import Store
 from llm_utils import call_llm
+from store import Store
 from summarize import _classify_noise
 
 VALIDITY_JUDGE_PROMPT = """你是记忆系统的过滤守卫。判断以下对话摘要是否有跨会话记忆价值。
@@ -34,7 +35,7 @@ VALIDITY_JUDGE_PROMPT = """你是记忆系统的过滤守卫。判断以下对�
 
 def main():
     paths = get_paths()
-    store = Store()
+    store = Store()  # noqa: F841 —— Store() 构造初始化 DB schema（副作用），变量本脚本不使用
 
     conn = sqlite3.connect(str(paths["db_path"]))
     conn.row_factory = sqlite3.Row
@@ -98,7 +99,7 @@ def main():
     conn.commit()
     conn.close()
 
-    print(f"\n=== 结果 ===")
+    print("\n=== 结果 ===")
     total = sum(results.values())
     for k, v in sorted(results.items()):
         pct = v / total * 100 if total else 0

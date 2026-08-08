@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import get_paths  # noqa: E402
+from config import get_paths
 
 try:
     from loguru import logger as _loguru_logger
