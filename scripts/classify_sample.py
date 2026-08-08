@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """随机抽取 100 条历史摘要做有效性分类，供人工审查校准。"""
-import os, sys, sqlite3, random
+import os
+import sqlite3
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths
-from store import Store
 from llm_utils import call_llm
+from store import Store
 from summarize import _classify_noise
 
 VALIDITY_JUDGE_PROMPT = """你是记忆系统的过滤守卫。判断以下对话摘要是否有跨会话记忆价值。
@@ -34,7 +36,7 @@ VALIDITY_JUDGE_PROMPT = """你是记忆系统的过滤守卫。判断以下对�
 
 def main():
     paths = get_paths()
-    store = Store()
+    store = Store()  # noqa: F841 —— Store() 构造初始化 DB schema（副作用），变量本脚本不使用
 
     conn = sqlite3.connect(str(paths["db_path"]))
     conn.row_factory = sqlite3.Row
@@ -106,7 +108,7 @@ def main():
     for r in results:
         vcounts[r["validity"]] = vcounts.get(r["validity"], 0) + 1
 
-    print(f"\n=== 分类结果 ===")
+    print("\n=== 分类结果 ===")
     for k, v in sorted(vcounts.items()):
         print(f"  {k}: {v} 条")
 

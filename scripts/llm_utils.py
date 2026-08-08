@@ -6,13 +6,10 @@ Ported from memory-pkg/src/claude_memory/json_utils.py (7-level cascade).
 
 import json
 import logging
-import os
 import re
 import time
-from typing import Any
 
 import requests
-
 from config import load_config
 
 logger = logging.getLogger("nailong.llm")

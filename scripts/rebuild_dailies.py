@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """一站重建所有日报：清旧 → 重跑 digest → 验证"""
-import sqlite3, os, sys
+import os
+import sqlite3
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import get_paths, BASE_DIR
-from store import Store
+from config import get_paths
 from digest import generate_daily
+from store import Store
+
 
 def main():
     paths = get_paths()
@@ -25,7 +28,7 @@ def main():
         fp = os.path.join(daily_dir, f)
         if os.path.isfile(fp):
             os.remove(fp)
-    print(f"2. 清存档文件")
+    print("2. 清存档文件")
 
     # ── 2. 收集所有需要日报的(真实日期, project) ──
     pairs = conn.execute("""

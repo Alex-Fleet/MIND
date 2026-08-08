@@ -11,11 +11,10 @@ Usage:
 import json
 import os
 import sys
-from pathlib import Path
 
 from config import get_paths
-from store import Store
 from log_setup import setup_logger
+from store import Store
 
 
 def extract_text(content_blocks) -> str:

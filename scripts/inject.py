@@ -18,9 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import get_paths, load_config
-from store import Store
-from projects import Registry
 from log_setup import setup_logger
+from projects import Registry
+from store import Store
 
 
 def _resolve_project_slugs(slug: str) -> list[str] | None:
@@ -223,14 +223,14 @@ def _safe_truncate(text: str, max_bytes: int = 9500) -> str:
     para_pos = chunk.rfind("\n\n")
     if para_pos > len(chunk) * 0.7:
         return text[:para_pos].rstrip() + \
-               f"\n\n（完整内容见 memory/ 对应文件）"
+               "\n\n（完整内容见 memory/ 对应文件）"
 
     # 找最后一个句子边界
     for punct in ["。\n", "！\n", "？\n", ".\n", "!\n", "?\n"]:
         punct_pos = chunk.rfind(punct)
         if punct_pos > len(chunk) * 0.7:
             return text[:punct_pos + 1] + \
-                   f"\n\n（完整内容见 memory/ 对应文件）"
+                   "\n\n（完整内容见 memory/ 对应文件）"
 
     # 硬截断（按空白字符）
     last_space = chunk.rfind(" ")
