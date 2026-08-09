@@ -2,7 +2,10 @@
 
 ## [Unreleased]
 
+## [v1.9.0] - 2026-08-09
+
 - **CI 落地**：新增 `.github/workflows/ci.yml`（push/PR 触发：ruff check → pytest）+ `audit.yml`（每周 cron：pip-audit）；新增 `pyproject.toml`（ruff 集中配置 + pytest testpaths）；`requirements-dev.txt` 锁定 ruff==0.16.1；全仓 lint 清理至 0 告警（自动修 66 处 + 手动处理 10 处，含刻意保留的副作用构造标注）
+- **CI 测试适配**：`tests/test_rename.py` 3 个断言 gitignored 文件存在的测试加 `skipif`（CI 全新 checkout 无 `memory/global/*.md` 与 `CLAUDE.md`，本地完整执行、CI 跳过）
 
 ## [v1.8.0] - 2026-08-06
 
