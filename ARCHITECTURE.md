@@ -22,7 +22,9 @@ memory/
 │   ├── user-profile.md        # 用户介绍 + 开发环境
 │   ├── programming-standards.md  # 辅助性程序设计规范（10 域 × 阶段）
 │   ├── agenting-skills.md     # Agent 编排技能
-│   └── coding-philosophy.md   # 代码风格 + Prompt 哲学
+│   ├── coding-philosophy.md   # 代码风格 + Prompt 哲学
+│   ├── checklists/            # 工程检查单知识库（inject 不扫，索引 + 按需 Read）
+│   └── skills/                # skills 内容源（inject 不扫，双向同步到用户级 skills）
 ├── projects/                  # 按项目 ID 匹配注入
 │   └── <project-id>/
 │       └── context.md         # 项目背景 / 关键决策 / 经验
@@ -32,6 +34,7 @@ memory/
 ```
 
 - `global/` 下所有 `.md` 全局注入；`projects/<id>/` 仅当 Registry 解析到该 id 时注入。
+- `global/` 下子目录（`checklists/`、`skills/`）**不被注入**——`inject.py` 用非递归 `glob("*.md")` 只扫顶层。`checklists/` 走「索引常驻 + 按需 Read」；`skills/` 是**内容源**，由 `scripts/skills_sync.py` 双向同步到用户级 `~/.claude/skills/`（Claude Code 原生扫描、description 即索引、按需触发加载）。symlink（cc-switch 等外部工具管理的 skill）一律不碰，两套独立系统。
 - heading 从文件第一行 `# 标题` 提取，`inject.py` 不硬编码文件名。
 - 向下兼容：若 `memory/global/` 不存在，回退到旧扁平结构。
 
