@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-- **skills 统一管理**：新增 `memory/global/skills/` 内容源 + `scripts/skills_sync.py` 双向同步器（MIND 内容源 ⇄ 用户级 `~/.claude/skills/`：增改双向一致、mtime 新者胜、symlink 外部管理的一律不碰、删除走 `--prune` 手动清）；首个 skill `project-kickoff`（新项目立项五阶段：质疑 → 追问 → 设计 → 边界 → 确认）；`memory/global/skills/` 加入 `.gitignore`（与 checklists 同私有化决策）
+## [v1.10.0] - 2026-08-10
+
+- **skills 统一管理**：新增 `memory/global/skills/` 内容源 + `scripts/skills_sync.py` 双向同步器（MIND 内容源 ⇄ 用户级 `~/.claude/skills/`：增改双向一致、mtime 新者胜、symlink 外部管理的一律不碰、删除走 `--prune` 手动清）；首个 skill `project-kickoff`（新项目立项六阶段：质疑 → 追问 → PRD → 架构 → 写时考虑 → 确认，内容源私有不进 git）；`memory/global/skills/` 加入 `.gitignore`（与 checklists 同私有化决策）
 
 ## [v1.9.0] - 2026-08-09
 
