@@ -72,14 +72,16 @@ def test_example_files_renamed():
 # ── 代码 / 文档引用 ─────────────────────────────────────────
 
 def test_hook_points_to_new_name():
+    """on_prompt.py（UPS）从行为规范文件提取硬性约束章节。"""
     text = (ROOT / "hooks" / "on_prompt.py").read_text(encoding="utf-8")
-    assert "programming-standards.md" in text
+    assert "behavior-standards.md" in text
     assert "iron-rules.md" not in text
 
 
 def test_install_uses_new_name():
+    """install.py 用 --pack K 贪心打包注入 global，不再硬编码 --file 文件名。"""
     text = (ROOT / "install.py").read_text(encoding="utf-8")
-    assert "--file programming-standards.md" in text
+    assert "--pack" in text
     assert "iron-rules.md" not in text
 
 

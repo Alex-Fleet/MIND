@@ -54,6 +54,10 @@ def load_config() -> dict:
         "min_summaries_for_daily": 2,
         "min_dailies_for_monthly": 3,
     })
+    cfg.setdefault("inject", {
+        "global_folders": [],
+        "shards": 24,
+    })
     cfg.setdefault("llm", {
         "model": "deepseek-v4-flash",
         "temperature": 0.3,

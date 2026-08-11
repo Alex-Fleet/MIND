@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **行为规范分层**：新增 `memory/global/behavior-standards.md`（智能体行为规范——做人/工作/思考，含整体意识方法论），`programming-standards.md` 精简为只留工程规范（Git 由用户决定并入 Git 章节）；模板/CLAUDE.md 兜底/ARCHITECTURE 同步
+- **注入配置驱动 + 贪心打包**：`inject.py` 新增 `--pack K`（运行时枚举 `memory/global/*.md` + `config.inject.global_folders`，按名排序贪心打包，超 1e4 字符封包、单文件截断单独成包）；`install.py` 删硬编码 `--file` 清单，改从 `config.inject.shards`（默认 24）生成 N 条 `--pack` 命令——新增/删除 global 文件不用重跑 install
+- **UPS 最小化**：`on_prompt.py` 只注入行为规范硬性约束（4 条铁律 ~1k 字符），完整规范走 SessionStart 前缀区（缓存命中 + 注意力强）
+- **单位修正**：`_safe_truncate` 按 UTF-16 字符（1e4）截断而非字节 9500——旧版把 8504 字符砍到 ~4932 丢 42%，截断注释预留空间保证总长 ≤1e4
+
 ## [v1.10.0] - 2026-08-10
 
 - **skills 统一管理**：新增 `memory/global/skills/` 内容源 + `scripts/skills_sync.py` 双向同步器（MIND 内容源 ⇄ 用户级 `~/.claude/skills/`：增改双向一致、mtime 新者胜、symlink 外部管理的一律不碰、删除走 `--prune` 手动清）；首个 skill `project-kickoff`（新项目立项六阶段：质疑 → 追问 → PRD → 架构 → 写时考虑 → 确认，内容源私有不进 git）；`memory/global/skills/` 加入 `.gitignore`（与 checklists 同私有化决策）

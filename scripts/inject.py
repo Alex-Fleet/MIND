@@ -200,44 +200,45 @@ def _build_global_memory(store: Store,
     return "\n".join(lines)
 
 
-def _safe_truncate(text: str, max_bytes: int = 9500) -> str:
-    """在 max_bytes 以内的最后一个自然段落边界截断。
+_TRUNCATE_TAIL = "\n\n（按 1e4 字符截断，完整内容见 memory/ 对应文件）"
+
+
+def _safe_truncate(text: str, max_chars: int = 10000) -> str:
+    """在 max_chars 以内的最后一个自然段落边界截断。
+    返回总长（正文 + 截断注释）≤ max_chars。
     优先级: ## heading > 空行 > 句号/问号/感叹号 > 硬截断。
-    所有长度按 UTF-8 字节计算（Claude Code hook 阈值是字节）。"""
-    text_bytes = len(text.encode("utf-8"))
-    if text_bytes <= max_bytes:
+    长度按 UTF-16 字符（code units）计算——Claude Code persistHookOutput
+    阈值是 1e4 字符（非字节），中文/ASCII 每字符约 1 unit。
+    （旧版误用字节 9500，中文 3 字节/字符会把 8504 字符砍到 ~4932，丢 42%。）"""
+    if len(text) <= max_chars:
         return text
 
-    # 截取 max_bytes 内的字符（处理多字节边界）
-    raw = text.encode("utf-8")[:max_bytes]
-    chunk = raw.decode("utf-8", errors="ignore")  # 丢弃不完整的多字节字符
+    # 预留截断注释的空间，保证 正文 + 注释 ≤ max_chars
+    budget = max_chars - len(_TRUNCATE_TAIL)
+    chunk = text[:budget]
 
     # 在 chunk 中找最后一个 ## heading
     heading_pos = chunk.rfind("\n## ")
     if heading_pos > len(chunk) * 0.6:
-        truncated = text[:heading_pos].rstrip()
-        return (truncated +
-                f"\n\n（完整内容见 memory/ 对应文件，已截断约 {text_bytes - len(truncated.encode('utf-8'))} 字节）")
+        return text[:heading_pos].rstrip() + _TRUNCATE_TAIL
 
     # 找最后一个段落空行
     para_pos = chunk.rfind("\n\n")
     if para_pos > len(chunk) * 0.7:
-        return text[:para_pos].rstrip() + \
-               "\n\n（完整内容见 memory/ 对应文件）"
+        return text[:para_pos].rstrip() + _TRUNCATE_TAIL
 
     # 找最后一个句子边界
     for punct in ["。\n", "！\n", "？\n", ".\n", "!\n", "?\n"]:
         punct_pos = chunk.rfind(punct)
         if punct_pos > len(chunk) * 0.7:
-            return text[:punct_pos + 1] + \
-                   "\n\n（完整内容见 memory/ 对应文件）"
+            return text[:punct_pos + 1] + _TRUNCATE_TAIL
 
     # 硬截断（按空白字符）
     last_space = chunk.rfind(" ")
     if last_space > len(chunk) * 0.8:
-        return text[:last_space] + "\n\n（完整内容见 memory/ 对应文件）"
+        return text[:last_space] + _TRUNCATE_TAIL
 
-    return chunk + "\n\n（完整内容见 memory/ 对应文件）"
+    return chunk.rstrip() + _TRUNCATE_TAIL
 
 
 def _build_global_file(store: Store, filename: str) -> str:
@@ -270,6 +271,109 @@ def _build_global_file(store: Store, filename: str) -> str:
 
     # 安全截断（文件级自然边界，不在句中切断）
     return _safe_truncate(output)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 贪心打包（--pack K）：运行时枚举注入源 → 打包 → 输出第 K 包。
+# 注入源 = memory/global/*.md（非递归）+ config.inject.global_folders 下各目录 *.md。
+# 文件按名排序，逐个塞包，超 1e4 字符封包；单文件 >1e4 截断单独成包。
+# 这样新增/删除 global 文件不用重跑 install——命令数固定，运行时自动分包。
+# ═══════════════════════════════════════════════════════════════
+
+PACK_MAX_CHARS = 10000
+
+
+def _global_source_files(store: Store) -> list[tuple[Path, str]]:
+    """枚举注入源，返回 [(file_path, rel_path), ...] 按文件名排序。
+    rel_path 相对 memory/ 目录（registry 删除过滤用）。"""
+    memory_dir = get_paths()["base_dir"] / "memory"
+    global_dir = memory_dir / "global"
+    files: list[tuple[Path, str]] = []
+
+    # 顶层（非递归）
+    if global_dir.is_dir():
+        for f in sorted(global_dir.glob("*.md")):
+            files.append((f, f"memory/global/{f.name}"))
+
+    # config.inject.global_folders 下各目录（非递归）
+    cfg = load_config()
+    for folder in cfg.get("inject", {}).get("global_folders", []):
+        sub = global_dir / folder
+        if not sub.is_dir():
+            continue
+        for f in sorted(sub.glob("*.md")):
+            files.append((f, f"memory/global/{folder}/{f.name}"))
+
+    return files
+
+
+def _render_global_source(store: Store, fpath: Path, rel_path: str) -> str:
+    """渲染单个注入源为带标题的 markdown，应用 registry 删除过滤 + 安全截断。"""
+    try:
+        content = fpath.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+    if not content:
+        return ""
+
+    deleted = _get_deleted_sections(store, rel_path)
+    if deleted:
+        content = _strip_deleted_from_content(content, deleted)
+    if not content.strip():
+        return ""
+
+    heading = _heading_from_file(fpath)
+    return f"## MIND 记忆 — {heading}\n\n{content}\n"
+
+
+def _pack_greedy(rendered: list[str], max_chars: int = PACK_MAX_CHARS) -> list[str]:
+    """贪心打包纯逻辑：逐个塞包，超 max_chars 封包；单段超长截断单独成包。
+    输入已按文件名排序（调用方负责），保证同输入输出逐字节稳定。"""
+    packs: list[str] = []
+    current: list[str] = []
+    current_len = 0
+
+    for r in rendered:
+        if not r.strip():
+            continue
+
+        # 单段 > max_chars：截断后单独成包（先把当前包收口）
+        if len(r) > max_chars:
+            if current:
+                packs.append("\n".join(current))
+                current, current_len = [], 0
+            packs.append(_safe_truncate(r, max_chars))
+            continue
+
+        # 塞不进当前包 → 封包，开新包
+        if current and current_len + len(r) > max_chars:
+            packs.append("\n".join(current))
+            current, current_len = [], 0
+
+        current.append(r)
+        current_len += len(r)
+
+    if current:
+        packs.append("\n".join(current))
+
+    return packs or [""]
+
+
+def _build_global_packs(store: Store) -> list[str]:
+    """贪心打包全部注入源，返回包列表（每个 ≤ PACK_MAX_CHARS 字符）。"""
+    rendered = [
+        _render_global_source(store, fpath, rel_path)
+        for fpath, rel_path in _global_source_files(store)
+    ]
+    return _pack_greedy(rendered, PACK_MAX_CHARS)
+
+
+def _build_global_pack(store: Store, k: int) -> str:
+    """输出第 K 包（1-based）。K 超出包数 → 空字符串。"""
+    packs = _build_global_packs(store)
+    if 1 <= k <= len(packs):
+        return packs[k - 1]
+    return ""
 
 
 def _build_project_memory(store: Store,
@@ -527,6 +631,13 @@ def main():
     except (ValueError, IndexError):
         pass
 
+    pack = None
+    try:
+        pi = sys.argv.index("--pack")
+        pack = int(sys.argv[pi + 1])
+    except (ValueError, IndexError):
+        pass
+
     limit = None
     try:
         li = sys.argv.index("--limit")
@@ -556,7 +667,9 @@ def main():
 
     if section:
         # ── Section mode: 只输出一个章节 ──
-        if section == "global" and global_file:
+        if section == "global" and pack:
+            output = _build_global_pack(store, pack)
+        elif section == "global" and global_file:
             output = _build_global_file(store, global_file)
         elif section == "global":
             output = _build_global_memory(store, project_slugs)
@@ -578,6 +691,7 @@ def main():
         store.log("inject_section", detail={
             "section": section,
             "file": global_file,
+            "pack": pack,
             "limit": limit,
             "chars": len(output),
             "project_slug": project_slug,

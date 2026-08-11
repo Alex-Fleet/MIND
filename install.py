@@ -73,15 +73,11 @@ def _is_nailong(entry: dict, script: str) -> bool:
     return any(script in h.get("command", "") for h in entry.get("hooks", []))
 
 
-# SessionStart 拆分：on_session_start.py + 8 条 inject --section 命令
-# 每条独立 10KB 预算，绕开 Claude Code persistHookOutput 硬限制
-SESSION_START_SECTIONS = [
-    ("global", "--file programming-standards.md"),
-    ("global", "--file agenting-skills.md"),
-    ("global", "--file coding-philosophy.md"),
-    ("global", "--file user-profile.md"),
-    # 检查单索引：仅告知 LLM 存在这些检查单 + 路径，内容按需 Read
-    ("global", "--file checklists-index.md"),
+# SessionStart 拆分：on_session_start.py + (N+4) 条 inject 命令
+# 每条独立 1e4 字符预算，绕开 Claude Code persistHookOutput 硬限制。
+# global 用 --pack K 贪心打包（运行时枚举注入源），N 从 config.inject.shards 读，
+# 新增/删除 global 文件不用重跑 install——命令数固定，运行时自动分包。
+PROJECT_SECTIONS = [
     ("project", ""),
     ("turns", "--limit 28"),
     ("dailies", "--limit 5"),
@@ -89,11 +85,28 @@ SESSION_START_SECTIONS = [
 ]
 
 
+def _load_shards() -> int:
+    """读 config.inject.shards（分片预算），缺失时默认 24。"""
+    try:
+        cfg_path = PROJECT / "config.json"
+        if cfg_path.exists():
+            import json
+            inject = json.loads(cfg_path.read_text(encoding="utf-8")).get("inject", {})
+            return int(inject.get("shards", 24))
+    except Exception:
+        pass
+    return 24
+
+
 def _build_session_start_entry() -> dict:
-    """构建完整的 SessionStart hook entry（on_session_start + 8 section 命令）。"""
+    """构建完整的 SessionStart hook entry（on_session_start + N+4 命令）。"""
     extra = [
+        _cmd("inject.py", f"--section global --pack {k}".strip(), timeout=15)
+        for k in range(1, _load_shards() + 1)
+    ]
+    extra += [
         _cmd("inject.py", f"--section {sec} {args}".strip(), timeout=15)
-        for sec, args in SESSION_START_SECTIONS
+        for sec, args in PROJECT_SECTIONS
     ]
     return hook_entry("on_session_start.py", timeout=120, extra_hooks=extra)
 
@@ -136,18 +149,19 @@ def main():
                  if not _is_nailong(e, "on_stop.py")]
     hooks["Stop"] = kept_stop + [hook_entry("on_stop.py", timeout=120)]
 
-    # SessionStart hook（主入口 + 8 条 section 拆分命令）
+    # SessionStart hook（主入口 + N+4 条 section 拆分命令）
     kept_ss = [e for e in hooks.get("SessionStart", [])
                if not _is_nailong(e, "on_session_start.py")]
     hooks["SessionStart"] = kept_ss + [_build_session_start_entry()]
 
-    # UserPromptSubmit hook（每轮注入辅助性程序设计规范）
+    # UserPromptSubmit hook（每轮注入硬性约束铁律，见 on_prompt.py）
     kept_ups = [e for e in hooks.get("UserPromptSubmit", [])
                 if not _is_nailong(e, "on_prompt.py")]
     hooks["UserPromptSubmit"] = kept_ups + [
         hook_entry("on_prompt.py", timeout=10)]
 
-    print("✓ 已注册 Stop + SessionStart(9条) + UserPromptSubmit hook")
+    n_ss = _load_shards() + len(PROJECT_SECTIONS)
+    print(f"✓ 已注册 Stop + SessionStart({n_ss}条) + UserPromptSubmit hook")
     print("  （保留了你其它的 hook 条目）")
 
     SETTINGS.write_text(
