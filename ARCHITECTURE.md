@@ -11,7 +11,7 @@
 | **Claude Code 原生记忆** | `~/.claude/projects/<项目slug>/memory/*.md` | 每项目一个文件夹 | Claude Code 内建，按项目加载 |
 | **MIND** | 本项目 `data/`（中心库 + 存档） | 全项目集中，`project` 字段区分 | MIND hook 注入 |
 
-- **全局记忆（可编辑）** → `memory/global/*.md`（行为规范 + 程序设计规范 + 偏好 + 技能）+ `memory/projects/<id>/*.md`（项目专属背景/经验），`inject.py` 两层 glob 注入。`CLAUDE.md` 做静态兜底。
+- **全局记忆（可编辑）** → `memory/global/*.md`（行为规范 + 程序设计规范 + 偏好 + 技能）+ `memory/global/exps/*.md`（工程经验，`global_folders` 注入）+ `memory/projects/<id>/*.md`（项目专属背景/经验），`inject.py` 两层 glob 注入。`CLAUDE.md` 做静态兜底。
 - **规范分两层**（v1.11.0）：`behavior-standards.md`（智能体行为规范——做人/工作/思考，含整体意识方法论）+ `programming-standards.md`（辅助性程序设计规范——工程/代码）。UPS 只注入行为规范硬性约束（4 条铁律），完整规范走 SessionStart 前缀区。
 - **项目摘要** → MIND中心库 `turn_summaries` / `daily_reports` / `monthly_reports`，`project` 字段区分。
 
@@ -23,7 +23,7 @@ memory/
 │   ├── user-profile.md        # 用户介绍 + 协作偏好
 │   ├── behavior-standards.md  # 智能体行为规范（做人/工作/思考）
 │   ├── programming-standards.md  # 辅助性程序设计规范（工程/代码）
-│   ├── exps/                  # 工程经验（config.inject.global_folders 配置注入，可空）
+│   ├── exps/                  # 工程经验（global_folders 配置注入：前端/后端/数据库/跨域分板块）
 │   ├── checklists/            # 工程检查单知识库（inject 不扫，索引 + 按需 Read）
 │   └── skills/                # skills 内容源（inject 不扫，双向同步到用户级 skills）
 ├── projects/                  # 按项目 ID 匹配注入
@@ -32,11 +32,12 @@ memory/
 ├── user-profile.example.md    # 模板（进 git）
 ├── behavior-standards.example.md
 ├── programming-standards.example.md
+├── exps.example.md               # exps/ 目录结构模板（进 git）
 └── project-context.example.md
 ```
 
 - `global/` 下所有 `.md` 全局注入；`projects/<id>/` 仅当 Registry 解析到该 id 时注入。
-- `global/` 下子目录（`checklists/`、`skills/`）**不被注入**——`inject.py` 用非递归 `glob("*.md")` 只扫顶层。`checklists/` 走「索引常驻 + 按需 Read」；`skills/` 是**内容源**，由 `scripts/skills_sync.py` 双向同步到用户级 `~/.claude/skills/`（Claude Code 原生扫描、description 即索引、按需触发加载）。symlink（cc-switch 等外部工具管理的 skill）一律不碰，两套独立系统。
+- `global/` 注入源 = 顶层 `*.md`（非递归）+ `config.inject.global_folders` 下各目录 `*.md`（当前 `exps/`）。其余子目录（`checklists/`、`skills/`）**不被注入**——`inject.py` 用非递归 `glob("*.md")` 只扫注入源。`checklists/` 走「索引常驻 + 按需 Read」；`skills/` 是**内容源**，由 `scripts/skills_sync.py` 双向同步到用户级 `~/.claude/skills/`（Claude Code 原生扫描、description 即索引、按需触发加载）。symlink（cc-switch 等外部工具管理的 skill）一律不碰，两套独立系统。
 - heading 从文件第一行 `# 标题` 提取，`inject.py` 不硬编码文件名。
 - 向下兼容：若 `memory/global/` 不存在，回退到旧扁平结构。
 
@@ -149,4 +150,4 @@ Stop-hook `systemMessage` 不渲染的缺口——让总结进度看得见。
 - **时间金字塔键错**：`digest.py` 按 `date(summarized_at)`（总结时刻）分组聚合日报/月报；
   批量重刷会把历史全糊进当天。需改为按**真实对话时间**（`turns.timestamp`）分组后再重建。
 - **项目身份不稳（slug 分身）** ✅ 已修复（v1.3.0）：Registry + 双向唯一（bijection）校验，`scripts/projects.py` 管理 slug→id 映射。项目记忆按稳定 id 而非 slug 匹配。
-- 注入体积：行为规范 + 程序规范精简后 global 侧 ~11K 字符（2 包，实测）；完整注入仍含 turns/dailies/monthlies 动态简报。
+- 注入体积：global 侧（行为规范 + 程序规范 + 画像 + exps 占位）~12K 字符（2 包，实测 [4173, 8192]）；完整注入仍含 turns/dailies/monthlies 动态简报。
