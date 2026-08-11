@@ -5,6 +5,10 @@
     "turn_days": 7,
     "daily_days": 30
   },
+  "inject": {
+    "global_folders": ["exps"],
+    "shards": 24
+  },
   "thresholds": {
     "min_turns_for_summary": 1,
     "min_summaries_for_daily": 2,

@@ -11,7 +11,8 @@
 | **Claude Code 原生记忆** | `~/.claude/projects/<项目slug>/memory/*.md` | 每项目一个文件夹 | Claude Code 内建，按项目加载 |
 | **MIND** | 本项目 `data/`（中心库 + 存档） | 全项目集中，`project` 字段区分 | MIND hook 注入 |
 
-- **全局记忆（可编辑）** → `memory/global/*.md`（用户辅助性程序设计规范、技能、偏好）+ `memory/projects/<id>/*.md`（项目专属背景/经验），`inject.py` 两层 glob 注入。`CLAUDE.md` 做静态兜底。
+- **全局记忆（可编辑）** → `memory/global/*.md`（行为规范 + 程序设计规范 + 偏好 + 技能）+ `memory/global/exps/*.md`（工程经验，`global_folders` 注入）+ `memory/projects/<id>/*.md`（项目专属背景/经验），`inject.py` 两层 glob 注入。`CLAUDE.md` 做静态兜底。
+- **规范分两层**（v1.11.0）：`behavior-standards.md`（智能体行为规范——做人/工作/思考，含整体意识方法论）+ `programming-standards.md`（辅助性程序设计规范——工程/代码）。UPS 只注入行为规范硬性约束（4 条铁律），完整规范走 SessionStart 前缀区。
 - **项目摘要** → MIND中心库 `turn_summaries` / `daily_reports` / `monthly_reports`，`project` 字段区分。
 
 ### `memory/` 目录结构
@@ -19,22 +20,24 @@
 ```
 memory/
 ├── global/                    # 全局注入（所有项目）
-│   ├── user-profile.md        # 用户介绍 + 开发环境
-│   ├── programming-standards.md  # 辅助性程序设计规范（10 域 × 阶段）
-│   ├── agenting-skills.md     # Agent 编排技能
-│   ├── coding-philosophy.md   # 代码风格 + Prompt 哲学
+│   ├── user-profile.md        # 用户介绍 + 协作偏好
+│   ├── behavior-standards.md  # 智能体行为规范（做人/工作/思考）
+│   ├── programming-standards.md  # 辅助性程序设计规范（工程/代码）
+│   ├── exps/                  # 工程经验（global_folders 配置注入：前端/后端/数据库/跨域分板块）
 │   ├── checklists/            # 工程检查单知识库（inject 不扫，索引 + 按需 Read）
 │   └── skills/                # skills 内容源（inject 不扫，双向同步到用户级 skills）
 ├── projects/                  # 按项目 ID 匹配注入
 │   └── <project-id>/
 │       └── context.md         # 项目背景 / 关键决策 / 经验
 ├── user-profile.example.md    # 模板（进 git）
+├── behavior-standards.example.md
 ├── programming-standards.example.md
+├── exps.example.md               # exps/ 目录结构模板（进 git）
 └── project-context.example.md
 ```
 
 - `global/` 下所有 `.md` 全局注入；`projects/<id>/` 仅当 Registry 解析到该 id 时注入。
-- `global/` 下子目录（`checklists/`、`skills/`）**不被注入**——`inject.py` 用非递归 `glob("*.md")` 只扫顶层。`checklists/` 走「索引常驻 + 按需 Read」；`skills/` 是**内容源**，由 `scripts/skills_sync.py` 双向同步到用户级 `~/.claude/skills/`（Claude Code 原生扫描、description 即索引、按需触发加载）。symlink（cc-switch 等外部工具管理的 skill）一律不碰，两套独立系统。
+- `global/` 注入源 = 顶层 `*.md`（非递归）+ `config.inject.global_folders` 下各目录 `*.md`（当前 `exps/`）。其余子目录（`checklists/`、`skills/`）**不被注入**——`inject.py` 用非递归 `glob("*.md")` 只扫注入源。`checklists/` 走「索引常驻 + 按需 Read」；`skills/` 是**内容源**，由 `scripts/skills_sync.py` 双向同步到用户级 `~/.claude/skills/`（Claude Code 原生扫描、description 即索引、按需触发加载）。symlink（cc-switch 等外部工具管理的 skill）一律不碰，两套独立系统。
 - heading 从文件第一行 `# 标题` 提取，`inject.py` 不硬编码文件名。
 - 向下兼容：若 `memory/global/` 不存在，回退到旧扁平结构。
 
@@ -68,17 +71,20 @@ memory/
 | Hook | 触发 | 干什么 | 约束 |
 |------|------|--------|------|
 | **Stop** | 每次 Claude 回复完 | ingest → summarize(LLM) → digest(check) → systemMessage/通知 | timeout 120s |
-| **SessionStart** | 新会话启动 | ingest + dashboard 保活 + 后台补漏（on_session_start.py），注入拆为 8 条独立 section 命令（global ×4 / project / turns / dailies / monthlies），每条 < 10KB 字节绕开 Claude Code persistHookOutput 硬限制 | **必须 <60s**，绝不同步调 LLM |
+| **SessionStart** | 新会话启动 | ingest + dashboard 保活 + 后台补漏（on_session_start.py），注入拆为 (N+4) 条独立 section 命令（global ×N 用 `--pack K` 贪心打包 + project / turns / dailies / monthlies），每条 ≤ 1e4 字符绕开 Claude Code persistHookOutput 硬限制 | **必须 <60s**，绝不同步调 LLM |
 
 ### SessionStart 拆分原理
 
-Claude Code hook 输出有 10KB 硬编码上限（`persistHookOutput` 阈值 `1e4` 字节），
+Claude Code hook 输出有硬编码上限（`persistHookOutput` 阈值 `1e4` **UTF-16 字符**，非字节），
 超出则存盘而非注入上下文。MIND 注入原单条 38-99KB 远超此限。
-**每条 hook command 独立 10KB 预算**，拆 N 条 = N × 10KB 总预算。
+**每条 hook command 独立 1e4 字符预算**，拆 N 条 = N × 1e4 总预算。
 
-8 条 section 命令（`inject.py --section <name>`），每条约 0.4-10KB：
-global（4 个文件各自一节）、project、turns（limit 28）、dailies（limit 5）、
-monthlies。超长文件（如 agenting-skills.md）字节级安全截断在 `##` 段落边界。
+(N+4) 条 section 命令（`inject.py --section <name>`）：
+- `global --pack K`（K=1..N，N 读 `config.inject.shards` 默认 24）——运行时枚举注入源
+  （`memory/global/*.md` 非递归 + `config.inject.global_folders` 下各目录），
+  文件按名排序贪心打包（超 1e4 字符封包；单文件 >1e4 安全截断单独成包），输出第 K 包。
+  新增/删除 global 文件不用重跑 install——命令数固定，运行时自动分包。
+- `project`、`turns（limit 28）`、`dailies（limit 5）`、`monthlies`。
 项目隔离通过 stdin SessionStart JSON 中的 `transcript_path` 提取 slug。
 
 ## 看板 (Dashboard)
@@ -144,4 +150,4 @@ Stop-hook `systemMessage` 不渲染的缺口——让总结进度看得见。
 - **时间金字塔键错**：`digest.py` 按 `date(summarized_at)`（总结时刻）分组聚合日报/月报；
   批量重刷会把历史全糊进当天。需改为按**真实对话时间**（`turns.timestamp`）分组后再重建。
 - **项目身份不稳（slug 分身）** ✅ 已修复（v1.3.0）：Registry + 双向唯一（bijection）校验，`scripts/projects.py` 管理 slug→id 映射。项目记忆按稳定 id 而非 slug 匹配。
-- 注入体积偏大（当前 ~50KB/会话），后续需精简（月报永久留、近 7 天 turn 收紧）。
+- 注入体积：global 侧（行为规范 + 程序规范 + 画像 + exps 占位）~12K 字符（2 包，实测 [4173, 8192]）；完整注入仍含 turns/dailies/monthlies 动态简报。
